@@ -15,8 +15,6 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
   const [target, setTarget] = useState('');
   const [hiddenPairs, setHiddenPairs] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-  const INITIAL_DISPLAY_COUNT = 10;
 
   const handleFetch = async () => {
     try {
@@ -52,7 +50,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
 
   const handleDeletePair = async (base: string, target: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to permanently delete ${base}/${target} and all its historical data?`)) {
+      if (window.confirm(`are you sure you want to permanently delete ${base}/${target} and all its historical data?`)) {
       try {
         await deletePair({ base, target }).unwrap();
         refetch();
@@ -64,7 +62,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
         });
       } catch (err) {
         console.error('Failed to delete pair:', err);
-        alert('Failed to delete pair. Please try again.');
+        alert('failed to delete pair. please try again.');
       }
     }
   };
@@ -74,18 +72,12 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
     return showHidden || !hiddenPairs.has(pairKey);
   }) || [];
 
-  const displayedRates = showAll 
-    ? visibleRates 
-    : visibleRates.slice(0, INITIAL_DISPLAY_COUNT);
-  
-  const hasMore = visibleRates.length > INITIAL_DISPLAY_COUNT;
-
   if (isLoading) {
     return (
       <div className="h-full flex justify-center items-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-6 h-6 border-2 border-[#667eea] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-[#a0a0a0] text-xs font-light">Loading...</p>
+          <p className="text-[#a0a0a0] text-xs font-light">loading...</p>
         </div>
       </div>
     );
@@ -94,13 +86,13 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
   if (error) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-4">
-        <p className="text-red-400 text-xs mb-3 text-center">Error loading rates</p>
-        <button
-          onClick={() => refetch()}
-          className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded text-xs font-medium transition-colors"
-        >
-          Retry
-        </button>
+            <p className="text-red-400 text-xs mb-3 text-center">error loading rates</p>
+            <button
+              onClick={() => refetch()}
+              className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded text-xs font-medium transition-colors"
+            >
+              retry
+            </button>
       </div>
     );
   }
@@ -114,12 +106,12 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/5 bg-[#1a1d29]">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-[#e5e5e5] uppercase tracking-wider">Watchlist</h2>
+          <h2 className="text-sm font-medium text-[#e5e5e5] tracking-wider">watchlist</h2>
           <div className="flex gap-1">
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="p-1.5 hover:bg-white/10 rounded text-[#a0a0a0] hover:text-[#e5e5e5] transition-colors"
-              title="Add pair"
+              title="add pair"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -129,7 +121,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
               onClick={handleFetch}
               disabled={isFetching}
               className="p-1.5 hover:bg-white/10 rounded text-[#a0a0a0] hover:text-[#e5e5e5] transition-colors disabled:opacity-50"
-              title="Fetch rates"
+              title="fetch rates"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -142,7 +134,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
             onClick={() => setShowHidden(!showHidden)}
             className="text-xs text-[#667eea] hover:text-[#764ba2] transition-colors"
           >
-            {showHidden ? 'Hide' : `Show ${hiddenPairs.size} hidden`}
+            {showHidden ? 'hide' : `show ${hiddenPairs.size} hidden`}
           </button>
         )}
       </div>
@@ -172,7 +164,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
               disabled={base.length !== 3 || target.length !== 3}
               className="px-3 py-1.5 bg-[#667eea] hover:bg-[#5568d3] disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs font-medium transition-all text-white"
             >
-              Add
+              add
             </button>
           </div>
         </div>
@@ -182,15 +174,15 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
       <div className="flex-1 overflow-y-auto">
         {data?.rates && data.rates.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <p className="text-xs text-[#a0a0a0] font-light">No pairs found. Click fetch to load data.</p>
+            <p className="text-xs text-[#a0a0a0] font-light">no pairs found. click fetch to load data.</p>
           </div>
         ) : visibleRates.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <p className="text-xs text-[#a0a0a0] font-light">All pairs are hidden.</p>
+            <p className="text-xs text-[#a0a0a0] font-light">all pairs are hidden.</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {displayedRates.map((rate, idx) => {
+            {visibleRates.map((rate, idx) => {
               const pairKey = `${rate.base_currency}/${rate.target_currency}`;
               const isHidden = hiddenPairs.has(pairKey);
               const selected = isSelected(rate.base_currency, rate.target_currency);
@@ -217,7 +209,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
                       <button
                         onClick={(e) => toggleHidePair(rate.base_currency, rate.target_currency, e)}
                         className="p-1 hover:bg-white/10 rounded transition-colors text-[#a0a0a0] hover:text-[#e5e5e5]"
-                        title={isHidden ? 'Show pair' : 'Hide pair'}
+                        title={isHidden ? 'show pair' : 'hide pair'}
                       >
                         {isHidden ? (
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,7 +226,7 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
                         onClick={(e) => handleDeletePair(rate.base_currency, rate.target_currency, e)}
                         disabled={isDeleting}
                         className="p-1 hover:bg-red-500/20 rounded transition-colors text-[#a0a0a0] hover:text-red-400 disabled:opacity-50"
-                        title="Delete pair"
+                        title="delete pair"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -245,30 +237,6 @@ const PairList = ({ onPairClick, selectedPair }: PairListProps) => {
                 </div>
               );
             })}
-          </div>
-        )}
-        {hasMore && (
-          <div className="px-4 py-3 border-t border-white/5">
-            <button
-              onClick={() => setShowAll(!showAll)}
-              className="w-full text-xs text-[#667eea] hover:text-[#764ba2] transition-colors font-light flex items-center justify-center gap-1"
-            >
-              {showAll ? (
-                <>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                  Show less
-                </>
-              ) : (
-                <>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  Show all ({visibleRates.length})
-                </>
-              )}
-            </button>
           </div>
         )}
       </div>

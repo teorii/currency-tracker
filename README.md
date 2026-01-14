@@ -46,11 +46,9 @@ You'll need a few things installed before getting started:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/currency-tracker.git
+git clone https://github.com/teorii/currency-tracker.git
 cd currency-tracker
 ```
-
-Don't forget to replace `YOUR_USERNAME` with your actual GitHub username.
 
 ### Backend Setup
 
@@ -373,15 +371,21 @@ Never commit `.env` files to version control. Use the `.env.example` file as a t
 
 ## Screenshots
 
-_Add screenshots of your application here to showcase the interface._
+To add screenshots of your application:
 
-## Support
+1. Take screenshots of your app and save them in a `screenshots/` folder in the root directory
+2. Add them to your repository
+3. Reference them here using markdown:
 
-If you run into any issues or have questions, feel free to open an issue on the repository.
+```markdown
+![Main Interface](screenshots/main-interface.png)
+![Chart View](screenshots/chart-view.png)
+![Pair Management](screenshots/pair-management.png)
+```
 
 ## Author
 
-[Your Name](https://github.com/YOUR_USERNAME)
+[teorii](https://github.com/teorii)
 
 ## Acknowledgments
 

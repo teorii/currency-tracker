@@ -7,7 +7,7 @@ interface PairHistoryProps {
   target: string;
 }
 
-type TimePeriod = '7d' | '30d' | '90d';
+type TimePeriod = '1d' | '7d' | '30d' | '90d';
 
 const PairHistory = ({ base, target }: PairHistoryProps) => {
   const [period, setPeriod] = useState<TimePeriod>('7d');
@@ -17,6 +17,9 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
     const start = new Date(now);
     
     switch (period) {
+      case '1d':
+        start.setDate(start.getDate() - 1);
+        break;
       case '7d':
         start.setDate(start.getDate() - 7);
         break;
@@ -34,6 +37,11 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
   const endDate = new Date();
   const startDate = getStartDate(period);
   
+  // For 1d, we want to include the full day, so set start to beginning of yesterday
+  if (period === '1d') {
+    startDate.setHours(0, 0, 0, 0);
+  }
+  
   // Use date-only format (YYYY-MM-DD)
   const startStr = startDate.toISOString().split('T')[0];
   const endStr = endDate.toISOString().split('T')[0];
@@ -45,63 +53,39 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
     end: endStr,
   });
 
-  if (isLoading) {
-    return (
-      <div className="h-full flex justify-center items-center bg-[#0a0a0a]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-[#667eea] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-[#a0a0a0] text-sm font-light">Loading history...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="h-full flex items-center justify-center bg-[#0a0a0a]">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md">
-          <p className="text-red-400 font-light">Error loading history. Try selecting a different pair or adjusting the date range.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data || data.history.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center bg-[#0a0a0a]">
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6 max-w-md">
-          <p className="text-yellow-400 font-light">No historical data available for {base}/{target} in the selected range.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Aggregate data by date to show one point per day (average rate for that day)
-  const dataByDate = new Map<string, { rates: number[], timestamp: string }>();
+  // Calculate latest rate and stats if we have data
+  let latestRate: number | null = null;
+  let minRate: number | null = null;
+  let maxRate: number | null = null;
+  let chartData: Array<{ date: string; rate: number; fullDate: number }> = [];
   
-  data.history.forEach((item) => {
-    const dateKey = new Date(item.timestamp).toISOString().split('T')[0];
-    if (!dataByDate.has(dateKey)) {
-      dataByDate.set(dateKey, { rates: [], timestamp: item.timestamp });
-    }
-    dataByDate.get(dateKey)!.rates.push(Number(item.rate));
-  });
+  if (data?.history && Array.isArray(data.history) && data.history.length > 0) {
+    // Aggregate data by date to show one point per day (average rate for that day)
+    const dataByDate = new Map<string, { rates: number[], timestamp: string }>();
+    
+    data.history.forEach((item) => {
+      const dateKey = new Date(item.timestamp).toISOString().split('T')[0];
+      if (!dataByDate.has(dateKey)) {
+        dataByDate.set(dateKey, { rates: [], timestamp: item.timestamp });
+      }
+      dataByDate.get(dateKey)!.rates.push(Number(item.rate));
+    });
 
-  const chartData = Array.from(dataByDate.entries())
-    .map(([dateKey, { rates, timestamp }]) => ({
-      date: new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      rate: rates.reduce((a, b) => a + b, 0) / rates.length, // Average rate for the day
-      fullDate: new Date(timestamp).getTime(),
-    }))
-    .sort((a, b) => a.fullDate - b.fullDate);
+    chartData = Array.from(dataByDate.entries())
+      .map(([dateKey, { rates, timestamp }]) => ({
+        date: new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rate: rates.reduce((a, b) => a + b, 0) / rates.length, // Average rate for the day
+        fullDate: new Date(timestamp).getTime(),
+      }))
+      .sort((a, b) => a.fullDate - b.fullDate);
 
-  const latestRate = chartData.length > 0 ? chartData[chartData.length - 1].rate : null;
-  const allRates = chartData.map(d => d.rate);
-  const minRate = allRates.length > 0 ? Math.min(...allRates) : null;
-  const maxRate = allRates.length > 0 ? Math.max(...allRates) : null;
-  
+    latestRate = chartData.length > 0 ? chartData[chartData.length - 1].rate : null;
+    const allRates = chartData.map(d => d.rate);
+    minRate = allRates.length > 0 ? Math.min(...allRates) : null;
+    maxRate = allRates.length > 0 ? Math.max(...allRates) : null;
+  }
+
   // Calculate domain with padding to prevent false movements
-  // If min and max are the same or very close, set a fixed range around that value
   const rateRange = maxRate && minRate ? maxRate - minRate : 0;
   const padding = rateRange > 0 ? rateRange * 0.1 : 0.0001; // 10% padding, or minimal padding if flat
   
@@ -114,23 +98,23 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
       {/* Chart Controls Bar */}
       <div className="px-6 py-3 border-b border-white/5 bg-[#131722] flex items-center justify-between">
         <div className="flex items-center gap-6">
-          {latestRate && (
+          {latestRate !== null && (
             <div className="flex items-center gap-4">
               <div>
-                <span className="text-xs text-[#a0a0a0] font-light">Last</span>
+                <span className="text-xs text-[#a0a0a0] font-light">last</span>
                 <span className="ml-2 text-lg text-[#e5e5e5] font-medium">{latestRate.toFixed(4)}</span>
               </div>
-              {minRate && maxRate && (
+              {minRate !== null && maxRate !== null && (
                 <div className="text-xs text-[#a0a0a0]">
-                  <span>H: </span><span className="text-[#e5e5e5]">{maxRate.toFixed(4)}</span>
-                  <span className="mx-2">L: </span><span className="text-[#e5e5e5]">{minRate.toFixed(4)}</span>
+                  <span>h: </span><span className="text-[#e5e5e5]">{maxRate.toFixed(4)}</span>
+                  <span className="mx-2">l: </span><span className="text-[#e5e5e5]">{minRate.toFixed(4)}</span>
                 </div>
               )}
             </div>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {(['7d', '30d', '90d'] as TimePeriod[]).map((p) => (
+          {(['1d', '7d', '30d', '90d'] as TimePeriod[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -148,8 +132,28 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
 
       {/* Chart Area */}
       <div className="flex-1 p-6">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+        {isLoading ? (
+          <div className="h-full flex justify-center items-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-2 border-[#667eea] border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-[#a0a0a0] text-sm font-light">loading history...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md">
+              <p className="text-red-400 font-light">error loading history. try selecting a different pair or adjusting the date range.</p>
+            </div>
+          </div>
+        ) : !data || !data.history || data.history.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6 max-w-md">
+              <p className="text-yellow-400 font-light">no historical data available for {base}/{target} in the selected range.</p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
             <XAxis 
               dataKey="date" 
@@ -174,8 +178,8 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
                 padding: '12px'
               }}
               labelStyle={{ color: '#a0a0a0', marginBottom: '8px', fontSize: '12px' }}
-              formatter={(value: number) => [value.toFixed(4), 'Rate']}
-              labelFormatter={(label) => `Date: ${label}`}
+              formatter={(value: number) => [value.toFixed(4), 'rate']}
+              labelFormatter={(label) => `date: ${label}`}
             />
             <Legend 
               wrapperStyle={{ color: '#a0a0a0', fontSize: '12px' }}
@@ -187,7 +191,7 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
               strokeWidth={2.5}
               dot={false}
               activeDot={{ r: 6, fill: '#667eea' }}
-              name={`${base}/${target} Rate`}
+              name={`${base}/${target} rate`}
             />
             <defs>
               <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
@@ -197,6 +201,7 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
             </defs>
           </LineChart>
         </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
