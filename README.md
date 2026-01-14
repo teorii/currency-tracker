@@ -371,9 +371,7 @@ Never commit `.env` files to version control. Use the `.env.example` file as a t
 
 ## Screenshots
 
-```markdown
 ![Main Interface](screenshots/main-interface.png)
-```
 
 ## Author
 
