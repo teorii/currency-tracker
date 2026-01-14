@@ -35,166 +35,123 @@ A full-stack application for tracking currency exchange rates with real-time dat
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+You'll need a few things installed before getting started:
 
 - **Python 3.8+** ([Download](https://www.python.org/downloads/))
 - **PostgreSQL 12+** ([Download](https://www.postgresql.org/download/))
 - **Node.js 16+** and npm ([Download](https://nodejs.org/))
-- **Git** (optional, for cloning)
 
-## Quick Start
+## Getting Started
 
-### 1. Clone the Repository
+### Clone the Repository
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/currency-tracker.git
 cd currency-tracker
 ```
 
-**Note:** Replace `YOUR_USERNAME` with your actual GitHub username.
+Don't forget to replace `YOUR_USERNAME` with your actual GitHub username.
 
-### 2. Backend Setup
+### Backend Setup
 
-#### 2.1. Create Virtual Environment
+First, let's get the backend up and running.
+
+#### Create Virtual Environment
 
 ```bash
 cd backend
 python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
 ```
 
-#### 2.2. Install Dependencies
+Then activate it:
+- **Windows**: `venv\Scripts\activate`
+- **macOS/Linux**: `source venv/bin/activate`
+
+#### Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-#### 2.3. Set Up PostgreSQL Database
+#### Set Up PostgreSQL Database
 
-**Option A: Using SQL Script (Recommended)**
+Create a new database called `currency_tracker`. You can do this through pgAdmin or the command line:
 
 ```bash
-# Connect to PostgreSQL
-psql -U postgres
-
-# Run the migration script
-\i migrations/001_initial_schema.sql
-
-# Or create database manually
-CREATE DATABASE currency_tracker;
-\q
+psql -U postgres -c "CREATE DATABASE currency_tracker;"
 ```
 
-**Option B: Using pgAdmin (GUI)**
+The tables will be created automatically when you start the server, so you don't need to run any migration scripts.
 
-1. Open pgAdmin
-2. Connect to your PostgreSQL server
-3. Right-click on "Databases" → "Create" → "Database"
-4. Enter name: `currency_tracker`
-5. Click "Save"
-6. Right-click on `currency_tracker` → "Query Tool"
-7. Open and run `migrations/001_initial_schema.sql`
+#### Configure Environment Variables
 
-**Option C: Using Command Line**
+Copy the example environment file and fill in your values:
 
 ```bash
-# Windows (find your PostgreSQL installation)
-"C:\Program Files\PostgreSQL\15\bin\psql.exe" -U postgres -c "CREATE DATABASE currency_tracker;"
-
-# macOS/Linux
-createdb -U postgres currency_tracker
-```
-
-#### 2.4. Configure Environment Variables
-
-Create a `.env` file in the `backend` directory by copying the example file:
-
-```bash
-# Copy the example file
-cd backend
 cp .env.example .env
 ```
 
-Then edit `.env` and fill in your actual values.
-
-**Required Environment Variables (.env file):**
+Now edit `.env` and add your actual values:
 
 ```env
 # Database Configuration
-# Format: postgresql://username:password@host:port/database_name
 DATABASE_URL=postgresql://postgres:your_password@localhost:5432/currency_tracker
 
 # Exchange Rate API Configuration
 EXCHANGE_RATE_API_BASE=http://api.exchangerate.host
 EXCHANGE_RATE_API_KEY=your_api_key_here
 
-# CORS Configuration (comma-separated list)
+# CORS Configuration
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173
 
-# Server Configuration (optional)
+# Server Configuration
 PORT=8000
 HOST=0.0.0.0
-
-# Logging Level (optional)
 LOG_LEVEL=INFO
 ```
 
-**Important:** 
+Make sure to:
 - Replace `your_password` with your actual PostgreSQL password
-- Replace `your_api_key_here` with your actual exchange rate API key
+- Replace `your_api_key_here` with your exchange rate API key (get one from [exchangerate.host](https://exchangerate.host))
 - Never commit the `.env` file to version control
-- Both `DATABASE_URL` and `EXCHANGE_RATE_API_KEY` are required - the application will not start without them
 
-#### 2.5. Run Database Migrations (Optional)
+Both `DATABASE_URL` and `EXCHANGE_RATE_API_KEY` are required - the app won't start without them.
 
-If you prefer using SQLAlchemy's auto-creation (default), tables will be created automatically on startup. Otherwise, run the SQL migration script manually.
-
-#### 2.6. Start the Backend Server
+#### Start the Backend Server
 
 ```bash
-# From the backend directory
 python -m app.main
+```
 
-# Or using uvicorn directly
+Or if you prefer using uvicorn directly:
+
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at:
-- **API Base**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs (Swagger UI)
+Once it's running, you can access:
+- **API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs (Swagger UI)
 - **Alternative Docs**: http://localhost:8000/redoc
 
-### 3. Frontend Setup
+### Frontend Setup
 
-#### 3.1. Install Dependencies
+Now let's get the frontend running.
+
+#### Install Dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-#### 3.2. Configure API Endpoint (if needed)
-
-The frontend is configured to connect to `http://localhost:8000` by default. If your backend runs on a different port, update:
-
-```typescript
-// frontend/src/store/api/ratesApi.ts
-const API_BASE_URL = 'http://localhost:8000'; // Change if needed
-```
-
-#### 3.3. Start the Development Server
+#### Start the Development Server
 
 ```bash
 npm run dev
 ```
 
-The frontend will be available at:
-- **Frontend**: http://localhost:5173
+The frontend will be available at http://localhost:5173. It's already configured to connect to the backend at `http://localhost:8000`, so if your backend is running on a different port, you'll need to update the API URL in `frontend/src/store/api/ratesApi.ts`.
 
 ## Project Structure
 
@@ -202,21 +159,17 @@ The frontend will be available at:
 currency-tracker/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
 │   │   ├── main.py              # FastAPI application entry point
 │   │   ├── database.py           # Database configuration
 │   │   ├── models.py             # SQLAlchemy models
 │   │   ├── routers/
-│   │   │   ├── __init__.py
 │   │   │   └── currency.py       # API endpoints
 │   │   └── services/
-│   │       ├── __init__.py
 │   │       └── exchange_rate_service.py  # Business logic
 │   ├── migrations/
 │   │   └── 001_initial_schema.sql  # Database migration script
 │   ├── requirements.txt          # Python dependencies
-│   ├── .env.example              # Environment variables template
-│   └── view_db.py                # Utility script to view database
+│   └── .env.example              # Environment variables template
 │
 ├── frontend/
 │   ├── src/
@@ -238,7 +191,7 @@ currency-tracker/
 
 ## API Endpoints
 
-### Currency Rates
+Here are the main API endpoints you can use:
 
 - `GET /rates/latest` - Get latest exchange rates for all tracked pairs
 - `GET /rates/history?base={base}&target={target}&start={start}&end={end}` - Get historical rates
@@ -307,45 +260,49 @@ curl -X DELETE http://localhost:8000/rates/pairs/USD/EUR
 
 **Error: `FATAL: password authentication failed`**
 
-- Verify your PostgreSQL password in `.env`
-- Ensure `DATABASE_URL` format is correct: `postgresql://user:password@host:port/database`
-- Check PostgreSQL is running: `pg_isready` or check service status
+- Double-check your PostgreSQL password in `.env`
+- Make sure the `DATABASE_URL` format is correct: `postgresql://user:password@host:port/database`
+- Verify PostgreSQL is running: `pg_isready` or check your service status
 
 **Error: `database "currency_tracker" does not exist`**
 
-- Create the database using one of the methods in section 2.3
-- Or run the SQL migration script manually
+- Create the database: `psql -U postgres -c "CREATE DATABASE currency_tracker;"`
+- Or run the SQL migration script manually if you prefer
 
 ### Port Already in Use
 
 **Backend (Port 8000):**
+
+On Windows:
 ```bash
-# Find and kill the process
-# Windows:
 netstat -ano | findstr :8000
 taskkill /PID <PID> /F
+```
 
-# macOS/Linux:
+On macOS/Linux:
+```bash
 lsof -ti:8000 | xargs kill -9
+```
 
-# Or change port in .env or command:
+Or just change the port:
+```bash
 uvicorn app.main:app --reload --port 8001
 ```
 
 **Frontend (Port 5173):**
+
 ```bash
-# Change port in vite.config.ts or:
 npm run dev -- --port 3000
 ```
 
 ### CORS Errors
 
-If you see CORS errors in the browser console:
+If you're seeing CORS errors in the browser:
 
-1. Ensure backend is running
-2. Check `CORS_ORIGINS` in backend `.env` includes your frontend URL
+1. Make sure the backend is running
+2. Check that `CORS_ORIGINS` in your backend `.env` includes your frontend URL
 3. Restart the backend server after changing `.env`
-4. Verify frontend URL matches exactly (including `http://` vs `https://`)
+4. Verify the frontend URL matches exactly (including `http://` vs `https://`)
 
 ### Missing Dependencies
 
@@ -363,9 +320,9 @@ npm install
 
 ### Chart Not Showing Data
 
-- Ensure you've clicked "Fetch Rates" at least once
-- Check browser console for errors
-- Verify backend API is responding: `curl http://localhost:8000/rates/latest`
+- Make sure you've clicked "Fetch Rates" at least once
+- Check the browser console for any errors
+- Verify the backend API is responding: `curl http://localhost:8000/rates/latest`
 - Check that the selected pair has historical data
 
 ## Development
@@ -373,11 +330,11 @@ npm install
 ### Running Tests
 
 ```bash
-# Backend tests (if implemented)
+# Backend tests
 cd backend
 pytest
 
-# Frontend tests (if implemented)
+# Frontend tests
 cd frontend
 npm test
 ```
@@ -385,14 +342,14 @@ npm test
 ### Code Quality
 
 - **Backend**: Follow PEP 8 style guide
-- **Frontend**: ESLint and Prettier configured
+- **Frontend**: ESLint and Prettier are configured
 - Use meaningful variable and function names
 - Add docstrings to functions and classes
 - Handle errors gracefully with try-catch blocks
 
 ### Environment Variables
 
-Never commit `.env` files to version control. The `.env.example` file serves as a template.
+Never commit `.env` files to version control. Use the `.env.example` file as a template.
 
 ## Production Deployment
 
@@ -420,7 +377,7 @@ _Add screenshots of your application here to showcase the interface._
 
 ## Support
 
-For issues and questions, please open an issue on the repository.
+If you run into any issues or have questions, feel free to open an issue on the repository.
 
 ## Author
 
