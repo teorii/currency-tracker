@@ -11,17 +11,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rates", tags=["rates"])
 
+# Manually trigger an exchange rate fetch from the external API.
+# Returns: dict: Result containing message, base_currency, timestamp, and counts
+# Raises: HTTPException: If the fetch operation fails
 @router.post("/fetch-now")
 async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
-    """
-    Manually trigger an exchange rate fetch from the external API.
-    
-    Returns:
-        dict: Result containing message, base_currency, timestamp, and counts
-        
-    Raises:
-        HTTPException: If the fetch operation fails
-    """
     try:
         result = await fetch_and_store_exchange_rates(db)
         return result
@@ -32,17 +26,11 @@ async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
         logger.error(f"Error in fetch-now endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error processing exchange rates: {str(e)}")
 
+# Get the latest exchange rate for each tracked currency pair.
+# Returns: dict: Contains 'rates' list and 'count' of rates
+# Raises: HTTPException: If database query fails
 @router.get("/latest")
 async def get_latest_rates(db: Session = Depends(get_db)):
-    """
-    Get the latest exchange rate for each tracked currency pair.
-    
-    Returns:
-        dict: Contains 'rates' list and 'count' of rates
-        
-    Raises:
-        HTTPException: If database query fails
-    """
     try:
         currency_pairs = db.query(CurrencyPair).all()
         
@@ -78,6 +66,9 @@ async def get_latest_rates(db: Session = Depends(get_db)):
         logger.error(f"Error fetching latest rates: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error retrieving latest rates: {str(e)}")
 
+# Try parsing as ISO datetime first, fall back to date-only format
+# Handle ISO format with or without timezone
+# If only date provided, set to end of day
 @router.get("/history")
 async def get_rate_history(
     base: str = Query(..., description="Base currency code (e.g., USD)"),
@@ -87,9 +78,7 @@ async def get_rate_history(
     db: Session = Depends(get_db)
 ):
     try:
-        # Try parsing as ISO datetime first, fall back to date-only format
         try:
-            # Handle ISO format with or without timezone
             if 'T' in start:
                 start_date = datetime.fromisoformat(start.replace('Z', ''))
             else:
@@ -98,12 +87,10 @@ async def get_rate_history(
             raise HTTPException(status_code=400, detail=f"Invalid start date format: {start}")
         
         try:
-            # Handle ISO format with or without timezone
             if 'T' in end:
                 end_date = datetime.fromisoformat(end.replace('Z', ''))
             else:
                 end_date = datetime.strptime(end, "%Y-%m-%d")
-                # If only date provided, set to end of day
                 end_date = end_date + timedelta(days=1) - timedelta(seconds=1)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid end date format: {end}")
@@ -152,26 +139,16 @@ async def get_rate_history(
         logger.error(f"Error fetching rate history: {e}")
         raise HTTPException(status_code=500, detail=f"Error retrieving rate history: {str(e)}")
 
+# Delete a currency pair and all its associated exchange rate history.
+# Args: base: Base currency code (e.g., "USD"), target: Target currency code (e.g., "EUR"), db: Database session
+# Returns: dict: Success message
+# Raises: HTTPException: If pair not found or deletion fails
 @router.delete("/pairs/{base}/{target}")
 async def delete_currency_pair(
     base: str,
     target: str,
     db: Session = Depends(get_db)
 ):
-    """
-    Delete a currency pair and all its associated exchange rate history.
-    
-    Args:
-        base: Base currency code (e.g., "USD")
-        target: Target currency code (e.g., "EUR")
-        db: Database session
-        
-    Returns:
-        dict: Success message
-        
-    Raises:
-        HTTPException: If pair not found or deletion fails
-    """
     try:
         currency_pair = db.query(CurrencyPair).filter(
             CurrencyPair.base_currency == base.upper(),

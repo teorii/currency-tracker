@@ -3,11 +3,11 @@ import PairList from './components/PairList';
 import PairHistory from './components/PairHistory';
 import { useGetLatestRatesQuery } from './store/api/ratesApi';
 
+// Auto-select first pair if available and none selected
 function App() {
   const { data } = useGetLatestRatesQuery();
   const [selectedPair, setSelectedPair] = useState<{ base: string; target: string } | null>(null);
 
-  // Auto-select first pair if available and none selected
   useEffect(() => {
     if (!selectedPair && data?.rates && data.rates.length > 0) {
       const firstRate = data.rates[0];

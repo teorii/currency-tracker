@@ -14,19 +14,11 @@ if not EXCHANGE_RATE_API_KEY:
     raise ValueError("EXCHANGE_RATE_API_KEY environment variable is required. Please set it in your .env file.")
 
 
+# Fetches exchange rates from the external API and stores them in the database.
+# Args: db: Database session
+# Returns: dict: Result containing message, base_currency, timestamp, and counts
+# Raises: Exception: If API call fails or data is invalid
 async def fetch_and_store_exchange_rates(db: Session):
-    """
-    Fetches exchange rates from the external API and stores them in the database.
-    
-    Args:
-        db: Database session
-        
-    Returns:
-        dict: Result containing message, base_currency, timestamp, and counts
-        
-    Raises:
-        Exception: If API call fails or data is invalid
-    """
     try:
         api_url = f"{EXCHANGE_RATE_API_BASE}/live?access_key={EXCHANGE_RATE_API_KEY}"
         

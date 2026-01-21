@@ -9,6 +9,12 @@ interface PairHistoryProps {
 
 type TimePeriod = '1d' | '7d' | '30d' | '90d';
 
+// For 1d, we want to include the full day, so set start to beginning of yesterday
+// Use date-only format (YYYY-MM-DD)
+// Calculate latest rate and stats if we have data
+// Aggregate data by date to show one point per day (average rate for that day)
+// Calculate domain with padding to prevent false movements
+// 10% padding, or minimal padding if flat
 const PairHistory = ({ base, target }: PairHistoryProps) => {
   const [period, setPeriod] = useState<TimePeriod>('7d');
   
@@ -37,12 +43,10 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
   const endDate = new Date();
   const startDate = getStartDate(period);
   
-  // For 1d, we want to include the full day, so set start to beginning of yesterday
   if (period === '1d') {
     startDate.setHours(0, 0, 0, 0);
   }
   
-  // Use date-only format (YYYY-MM-DD)
   const startStr = startDate.toISOString().split('T')[0];
   const endStr = endDate.toISOString().split('T')[0];
 
@@ -53,14 +57,12 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
     end: endStr,
   });
 
-  // Calculate latest rate and stats if we have data
   let latestRate: number | null = null;
   let minRate: number | null = null;
   let maxRate: number | null = null;
   let chartData: Array<{ date: string; rate: number; fullDate: number }> = [];
   
   if (data?.history && Array.isArray(data.history) && data.history.length > 0) {
-    // Aggregate data by date to show one point per day (average rate for that day)
     const dataByDate = new Map<string, { rates: number[], timestamp: string }>();
     
     data.history.forEach((item) => {
@@ -74,7 +76,7 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
     chartData = Array.from(dataByDate.entries())
       .map(([dateKey, { rates, timestamp }]) => ({
         date: new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        rate: rates.reduce((a, b) => a + b, 0) / rates.length, // Average rate for the day
+        rate: rates.reduce((a, b) => a + b, 0) / rates.length,
         fullDate: new Date(timestamp).getTime(),
       }))
       .sort((a, b) => a.fullDate - b.fullDate);
@@ -85,9 +87,8 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
     maxRate = allRates.length > 0 ? Math.max(...allRates) : null;
   }
 
-  // Calculate domain with padding to prevent false movements
   const rateRange = maxRate && minRate ? maxRate - minRate : 0;
-  const padding = rateRange > 0 ? rateRange * 0.1 : 0.0001; // 10% padding, or minimal padding if flat
+  const padding = rateRange > 0 ? rateRange * 0.1 : 0.0001;
   
   const yAxisDomain = minRate && maxRate 
     ? [minRate - padding, maxRate + padding]
