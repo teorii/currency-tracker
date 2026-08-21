@@ -1,17 +1,13 @@
-from sqlalchemy.orm import Session
-from ..models import CurrencyPair, ExchangeRate
-from datetime import datetime, timedelta
-import httpx
 import logging
-import os
+from datetime import datetime, timedelta
+
+import httpx
+from sqlalchemy.orm import Session
+
+from ..config import get_settings
+from ..models import CurrencyPair, ExchangeRate
 
 logger = logging.getLogger(__name__)
-
-EXCHANGE_RATE_API_BASE = os.getenv("EXCHANGE_RATE_API_BASE", "http://api.exchangerate.host")
-EXCHANGE_RATE_API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
-
-if not EXCHANGE_RATE_API_KEY:
-    raise ValueError("EXCHANGE_RATE_API_KEY environment variable is required. Please set it in your .env file.")
 
 
 # Fetches exchange rates from the external API and stores them in the database.
@@ -20,11 +16,15 @@ if not EXCHANGE_RATE_API_KEY:
 # Raises: Exception: If API call fails or data is invalid
 async def fetch_and_store_exchange_rates(db: Session):
     try:
-        api_url = f"{EXCHANGE_RATE_API_BASE}/live?access_key={EXCHANGE_RATE_API_KEY}"
-        
+        settings = get_settings()
+
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(api_url, timeout=10.0)
+                response = await client.get(
+                    f"{settings.exchange_rate_api_base}/live",
+                    params={"access_key": settings.exchange_rate_api_key},
+                    timeout=settings.exchange_rate_timeout_seconds,
+                )
                 response.raise_for_status()
                 data = response.json()
             except httpx.TimeoutException:

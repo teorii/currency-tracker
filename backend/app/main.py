@@ -1,35 +1,36 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from .database import engine, Base, SessionLocal
-from .routers import currency
-from .services.exchange_rate_service import fetch_and_store_exchange_rates
+import logging
+
+import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from dotenv import load_dotenv
-import uvicorn
-import logging
-import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv()
+from .config import get_settings
+from .database import Base, SessionLocal, engine
+from .routers import currency
+from .services.exchange_rate_service import fetch_and_store_exchange_rates
 
+settings = get_settings()
+
+# Without this the application's log records have nowhere to go and every
+# logger call below is silently discarded.
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
 app = FastAPI(title="Currency Exchange Rate Tracker API", version="1.0.0")
 
-cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173")
-cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
-
-logger.info(f"CORS origins configured: {cors_origins}")
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 async def scheduled_fetch_rates():
@@ -55,7 +56,7 @@ async def startup_event():
     try:
         scheduler.add_job(
             scheduled_fetch_rates,
-            trigger=CronTrigger(minute=0),
+            trigger=CronTrigger(minute=settings.fetch_schedule_minute),
             id='fetch_exchange_rates',
             name='Fetch exchange rates every hour',
             replace_existing=True

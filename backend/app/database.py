@@ -1,31 +1,21 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
-from dotenv import load_dotenv
-import os
+from collections.abc import Iterator
 
-load_dotenv()
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+from .config import get_settings
 
-if not DATABASE_URL:
-    raise ValueError(
-        "DATABASE_URL environment variable is required. "
-        "Please set it in your .env file. "
-        "Format: postgresql://username:password@host:port/database_name"
-    )
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# pool_pre_ping costs one round trip per checkout but avoids handing out
+# connections that the database has already dropped, which is the usual
+# failure mode after the app has been idle overnight.
+engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
-def get_db():
+
+def get_db() -> Iterator[Session]:
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-def init_db():
-    Base.metadata.create_all(bind=engine)
