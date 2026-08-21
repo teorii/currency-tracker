@@ -10,6 +10,10 @@ from ..models import CurrencyPair, ExchangeRate
 logger = logging.getLogger(__name__)
 
 
+class ExchangeRateError(RuntimeError):
+    """The upstream rate provider could not be reached or gave back nonsense."""
+
+
 # Fetches exchange rates from the external API and stores them in the database.
 # Args: db: Database session
 # Returns: dict: Result containing message, base_currency, timestamp, and counts
@@ -29,18 +33,20 @@ async def fetch_and_store_exchange_rates(db: Session):
                 data = response.json()
             except httpx.TimeoutException:
                 logger.error("Timeout while fetching exchange rates from API")
-                raise Exception("Exchange rate API request timed out. Please try again later.")
+                raise ExchangeRateError("The exchange rate provider timed out.") from None
             except httpx.HTTPStatusError as e:
                 logger.error(f"HTTP error from exchange rate API: {e.response.status_code}")
-                raise Exception(f"Exchange rate API returned error: {e.response.status_code}")
+                raise ExchangeRateError(
+                    f"The exchange rate provider returned {e.response.status_code}."
+                ) from e
             except httpx.RequestError as e:
                 logger.error(f"Request error while fetching exchange rates: {e}")
-                raise Exception("Failed to connect to exchange rate API. Please check your internet connection.")
+                raise ExchangeRateError("Could not reach the exchange rate provider.") from e
         
         if not data.get("success", False) or "quotes" not in data:
             error_msg = data.get("error", {}).get("info", "Invalid response from exchange rate API")
             logger.error(f"Invalid API response: {error_msg}")
-            raise ValueError(f"Invalid response from exchange rate API: {error_msg}")
+            raise ExchangeRateError(f"The exchange rate provider rejected the request: {error_msg}")
         
         base_currency = data.get("source", "USD")
         quotes = data.get("quotes", {})

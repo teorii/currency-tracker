@@ -4,6 +4,8 @@ import os
 # pointed at SQLite before anything under app/ is imported.
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["EXCHANGE_RATE_API_KEY"] = "test-key"
+# Pinned so the suite never reads a developer's real .env or reaches the network.
+os.environ["EXCHANGE_RATE_API_BASE"] = "https://rates.test"
 os.environ["SCHEDULER_ENABLED"] = "false"
 
 import pytest
