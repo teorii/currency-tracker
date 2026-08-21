@@ -13,4 +13,6 @@ select = ["E", "F", "I", "UP", "B", "SIM", "DTZ", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# So the suite runs the same whether invoked as pytest or python -m pytest.
+pythonpath = ["."]
 addopts = "-q"

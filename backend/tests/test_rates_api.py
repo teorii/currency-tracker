@@ -1,0 +1,96 @@
+from datetime import datetime, timedelta
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models import CurrencyPair, ExchangeRate
+
+
+@pytest.fixture
+def usd_eur(db: Session) -> CurrencyPair:
+    pair = CurrencyPair(base_currency="USD", target_currency="EUR")
+    db.add(pair)
+    db.commit()
+    db.refresh(pair)
+    return pair
+
+
+def stamp(year: int, month: int, day: int, hour: int = 0) -> datetime:
+    """A naive timestamp, matching what ExchangeRate.timestamp still stores."""
+    return datetime(year, month, day, hour)  # noqa: DTZ001
+
+
+def add_rate(db: Session, pair: CurrencyPair, rate: float, when: datetime) -> None:
+    db.add(ExchangeRate(currency_pair_id=pair.id, rate=rate, timestamp=when))
+    db.commit()
+
+
+def test_root_identifies_the_service(client: TestClient) -> None:
+    assert client.get("/").json() == {"message": "Currency Exchange Rate Tracker API"}
+
+
+def test_latest_explains_itself_when_nothing_is_tracked(client: TestClient) -> None:
+    body = client.get("/rates/latest").json()
+
+    assert body["count"] == 0
+    assert body["rates"] == []
+
+
+def test_latest_returns_the_most_recent_rate_per_pair(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    now = stamp(2026, 3, 1, 12)
+    add_rate(db, usd_eur, 0.90, now - timedelta(hours=2))
+    add_rate(db, usd_eur, 0.92, now)
+
+    body = client.get("/rates/latest").json()
+
+    assert body["count"] == 1
+    assert body["rates"][0]["rate"] == pytest.approx(0.92)
+    assert body["rates"][0]["base_currency"] == "USD"
+
+
+def test_history_returns_only_points_inside_the_range(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.88, stamp(2026, 2, 20, 9))
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 2, 9))
+    add_rate(db, usd_eur, 0.91, stamp(2026, 3, 4, 9))
+
+    body = client.get(
+        "/rates/history",
+        params={"base": "USD", "target": "EUR", "start": "2026-03-01", "end": "2026-03-31"},
+    ).json()
+
+    assert [point["rate"] for point in body["history"]] == [0.90, 0.91]
+    assert body["count"] == 2
+
+
+def test_history_accepts_lowercase_currency_codes(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 2, 9))
+
+    response = client.get(
+        "/rates/history",
+        params={"base": "usd", "target": "eur", "start": "2026-03-01", "end": "2026-03-31"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["base_currency"] == "USD"
+
+
+def test_deleting_a_pair_removes_its_history(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 2, 9))
+
+    assert client.delete("/rates/pairs/USD/EUR").status_code == 200
+
+    assert db.query(CurrencyPair).count() == 0
+    assert db.query(ExchangeRate).count() == 0
+
+
+def test_deleting_an_unknown_pair_is_a_404(client: TestClient) -> None:
+    assert client.delete("/rates/pairs/USD/JPY").status_code == 404
