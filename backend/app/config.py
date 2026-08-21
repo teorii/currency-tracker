@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     ]
 
     fetch_schedule_minute: int = 0
+    # Tests and one-off management commands boot the app without wanting a
+    # background job attached to it.
+    scheduler_enabled: bool = True
+
+    # 127.0.0.1 rather than 0.0.0.0 so a development server is not exposed to
+    # the local network by accident. Deployments set HOST explicitly.
+    host: str = "127.0.0.1"
+    port: int = 8000
     log_level: str = "INFO"
 
     @field_validator("cors_origins", mode="before")

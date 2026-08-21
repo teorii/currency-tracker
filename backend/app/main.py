@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -23,7 +25,51 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
-app = FastAPI(title="Currency Exchange Rate Tracker API", version="1.0.0")
+
+async def refresh_rates() -> None:
+    """Scheduler entry point. Owns its own session because no request is in flight."""
+    db = SessionLocal()
+    try:
+        result = await fetch_and_store_exchange_rates(db)
+        logger.info("Scheduled refresh stored %d rates", result["stored_count"])
+    except Exception:
+        # A failed refresh must not kill the job; the next tick retries.
+        logger.exception("Scheduled refresh failed")
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    Base.metadata.create_all(bind=engine)
+
+    if settings.scheduler_enabled:
+        scheduler.add_job(
+            refresh_rates,
+            trigger=CronTrigger(minute=settings.fetch_schedule_minute),
+            id="refresh_rates",
+            name="Hourly exchange rate refresh",
+            replace_existing=True,
+        )
+        scheduler.start()
+        logger.info(
+            "Rates refresh scheduled at minute %d of each hour",
+            settings.fetch_schedule_minute,
+        )
+
+    try:
+        yield
+    finally:
+        if scheduler.running:
+            scheduler.shutdown()
+        engine.dispose()
+
+
+app = FastAPI(
+    title="Currency Exchange Rate Tracker API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,51 +79,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def scheduled_fetch_rates():
-    db = SessionLocal()
-    try:
-        logger.info("Starting scheduled exchange rate fetch...")
-        result = await fetch_and_store_exchange_rates(db)
-        logger.info(f"Scheduled fetch completed: {result.get('message', 'Success')}")
-    except Exception as e:
-        logger.error(f"Error in scheduled fetch: {e}", exc_info=True)
-    finally:
-        db.close()
-
-@app.on_event("startup")
-async def startup_event():
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Failed to connect to database: {e}")
-        logger.warning("Server will start but database operations may fail. Please check your DATABASE_URL.")
-    
-    try:
-        scheduler.add_job(
-            scheduled_fetch_rates,
-            trigger=CronTrigger(minute=settings.fetch_schedule_minute),
-            id='fetch_exchange_rates',
-            name='Fetch exchange rates every hour',
-            replace_existing=True
-        )
-        scheduler.start()
-        logger.info("Scheduler started: Exchange rates will be fetched every hour")
-    except Exception as e:
-        logger.error(f"Failed to start scheduler: {e}")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    if scheduler.running:
-        scheduler.shutdown()
-        logger.info("Scheduler shut down")
-    engine.dispose()
-
 app.include_router(currency.router)
 
+
 @app.get("/")
-async def read_root():
+async def read_root() -> dict[str, str]:
     return {"message": "Currency Exchange Rate Tracker API"}
 
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=settings.host, port=settings.port)
