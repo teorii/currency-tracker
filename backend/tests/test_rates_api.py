@@ -94,3 +94,65 @@ def test_deleting_a_pair_removes_its_history(
 
 def test_deleting_an_unknown_pair_is_a_404(client: TestClient) -> None:
     assert client.delete("/rates/pairs/USD/JPY").status_code == 404
+
+
+def test_history_for_an_untracked_pair_is_a_404(client: TestClient) -> None:
+    response = client.get(
+        "/rates/history",
+        params={"base": "USD", "target": "EUR", "start": "2026-03-01", "end": "2026-03-31"},
+    )
+
+    assert response.status_code == 404
+    assert "USD/EUR" in response.json()["detail"]
+
+
+def test_history_rejects_an_unreadable_date(client: TestClient, usd_eur: CurrencyPair) -> None:
+    response = client.get(
+        "/rates/history",
+        params={"base": "USD", "target": "EUR", "start": "not-a-date", "end": "2026-03-31"},
+    )
+
+    assert response.status_code == 400
+    assert "start" in response.json()["detail"]
+
+
+def test_history_rejects_a_reversed_range(client: TestClient, usd_eur: CurrencyPair) -> None:
+    response = client.get(
+        "/rates/history",
+        params={"base": "USD", "target": "EUR", "start": "2026-03-31", "end": "2026-03-01"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_history_accepts_offset_aware_timestamps(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    """An offset-aware bound used to be compared against a naive column."""
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 2, 9))
+
+    response = client.get(
+        "/rates/history",
+        params={
+            "base": "USD",
+            "target": "EUR",
+            "start": "2026-03-01T00:00:00+00:00",
+            "end": "2026-03-31T23:59:59Z",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+
+
+def test_history_end_date_includes_the_whole_final_day(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 31, 18))
+
+    body = client.get(
+        "/rates/history",
+        params={"base": "USD", "target": "EUR", "start": "2026-03-01", "end": "2026-03-31"},
+    ).json()
+
+    assert body["count"] == 1

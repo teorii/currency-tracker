@@ -1,11 +1,13 @@
+import logging
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
 from ..database import get_db
 from ..models import CurrencyPair, ExchangeRate
 from ..services.exchange_rate_service import fetch_and_store_exchange_rates
-from datetime import datetime, timedelta
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +23,10 @@ async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
         return result
     except ValueError as e:
         logger.error(f"Validation error in fetch-now endpoint: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid request: {e!s}")
     except Exception as e:
         logger.error(f"Error in fetch-now endpoint: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error processing exchange rates: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing exchange rates: {e!s}")
 
 # Get the latest exchange rate for each tracked currency pair.
 # Returns: dict: Contains 'rates' list and 'count' of rates
@@ -64,80 +66,92 @@ async def get_latest_rates(db: Session = Depends(get_db)):
         
     except Exception as e:
         logger.error(f"Error fetching latest rates: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving latest rates: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving latest rates: {e!s}")
 
-# Try parsing as ISO datetime first, fall back to date-only format
-# Handle ISO format with or without timezone
-# If only date provided, set to end of day
+def _parse_boundary(value: str, field: str) -> datetime:
+    """Read a range boundary given as either YYYY-MM-DD or a full ISO timestamp."""
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read {field} date {value!r}. Use YYYY-MM-DD or an ISO timestamp.",
+        ) from None
+
+    if parsed.tzinfo is not None:
+        # Timestamps are stored naive in UTC, and comparing those against an
+        # offset-aware value is an error rather than a conversion.
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
+
+    if "T" not in value:
+        # A bare date as the end of a range should include that whole day.
+        return parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    return parsed
+
+
 @router.get("/history")
 async def get_rate_history(
-    base: str = Query(..., description="Base currency code (e.g., USD)"),
-    target: str = Query(..., description="Target currency code (e.g., EUR)"),
-    start: str = Query(..., description="Start date/time (YYYY-MM-DD or ISO format)"),
-    end: str = Query(..., description="End date/time (YYYY-MM-DD or ISO format)"),
-    db: Session = Depends(get_db)
+    base: str = Query(..., description="Base currency code, for example USD"),
+    target: str = Query(..., description="Target currency code, for example EUR"),
+    start: str = Query(..., description="Start of the range, YYYY-MM-DD or ISO timestamp"),
+    end: str = Query(..., description="End of the range, YYYY-MM-DD or ISO timestamp"),
+    db: Session = Depends(get_db),
 ):
-    try:
-        try:
-            if 'T' in start:
-                start_date = datetime.fromisoformat(start.replace('Z', ''))
-            else:
-                start_date = datetime.strptime(start, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid start date format: {start}")
-        
-        try:
-            if 'T' in end:
-                end_date = datetime.fromisoformat(end.replace('Z', ''))
-            else:
-                end_date = datetime.strptime(end, "%Y-%m-%d")
-                end_date = end_date + timedelta(days=1) - timedelta(seconds=1)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid end date format: {end}")
-        
-        if start_date > end_date:
-            raise HTTPException(status_code=400, detail="Start date must be before end date")
-        
-        currency_pair = db.query(CurrencyPair).filter(
+    start_at = _parse_boundary(start, "start")
+    if "T" not in start:
+        start_at = start_at.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_at = _parse_boundary(end, "end")
+
+    if start_at > end_at:
+        raise HTTPException(
+            status_code=400, detail="The start date must not be after the end date."
+        )
+
+    currency_pair = (
+        db.query(CurrencyPair)
+        .filter(
             CurrencyPair.base_currency == base.upper(),
-            CurrencyPair.target_currency == target.upper()
-        ).first()
-        
-        if not currency_pair:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Currency pair {base}/{target} not found. Call POST /rates/fetch-now first."
-            )
-        
-        rates = db.query(ExchangeRate).filter(
+            CurrencyPair.target_currency == target.upper(),
+        )
+        .first()
+    )
+
+    if currency_pair is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Currency pair {base.upper()}/{target.upper()} is not tracked.",
+        )
+
+    rates = (
+        db.query(ExchangeRate)
+        .filter(
             ExchangeRate.currency_pair_id == currency_pair.id,
-            ExchangeRate.timestamp >= start_date,
-            ExchangeRate.timestamp <= end_date
-        ).order_by(ExchangeRate.timestamp).all()
-        
-        history = [
-            {
-                "date": rate.timestamp.date().isoformat(),
-                "timestamp": rate.timestamp.isoformat(),
-                "rate": rate.rate
-            }
-            for rate in rates
-        ]
-        
-        return {
-            "base_currency": base.upper(),
-            "target_currency": target.upper(),
-            "start_date": start,
-            "end_date": end,
-            "history": history,
-            "count": len(history)
+            ExchangeRate.timestamp >= start_at,
+            ExchangeRate.timestamp <= end_at,
+        )
+        .order_by(ExchangeRate.timestamp)
+        .all()
+    )
+
+    history = [
+        {
+            "date": rate.timestamp.date().isoformat(),
+            "timestamp": rate.timestamp.isoformat(),
+            "rate": rate.rate,
         }
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid date format. Use YYYY-MM-DD: {str(e)}")
-    except Exception as e:
-        logger.error(f"Error fetching rate history: {e}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving rate history: {str(e)}")
+        for rate in rates
+    ]
+
+    return {
+        "base_currency": base.upper(),
+        "target_currency": target.upper(),
+        "start_date": start,
+        "end_date": end,
+        "history": history,
+        "count": len(history),
+    }
+
 
 # Delete a currency pair and all its associated exchange rate history.
 # Args: base: Base currency code (e.g., "USD"), target: Target currency code (e.g., "EUR"), db: Database session
@@ -177,4 +191,4 @@ async def delete_currency_pair(
     except Exception as e:
         logger.error(f"Error deleting currency pair: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error deleting currency pair: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting currency pair: {e!s}")
