@@ -1,6 +1,15 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, TypeDecorator
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    TypeDecorator,
+    UniqueConstraint,
+)
 
 from .database import Base
 
@@ -38,22 +47,34 @@ def utcnow() -> datetime:
 
 class CurrencyPair(Base):
     __tablename__ = "currency_pairs"
+    # Every lookup is by both codes together, and the same pair twice is
+    # meaningless, so one unique index does the work of the two it replaces.
+    __table_args__ = (
+        UniqueConstraint("base_currency", "target_currency", name="uq_currency_pair"),
+    )
 
     id = Column(Integer, primary_key=True)
-    base_currency = Column(String(3), nullable=False, index=True)
-    target_currency = Column(String(3), nullable=False, index=True)
+    base_currency = Column(String(3), nullable=False)
+    target_currency = Column(String(3), nullable=False)
     created_at = Column(UTCDateTime, nullable=False, default=utcnow)
     updated_at = Column(UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
 class ExchangeRate(Base):
     __tablename__ = "exchange_rates"
-    __table_args__ = (Index("idx_currency_pair_timestamp", "currency_pair_id", "timestamp"),)
+    # A pair has one rate at any given quote time. The unique index this
+    # creates also serves the only two reads there are: the history range
+    # scan and the per-pair ranking behind /rates/latest.
+    __table_args__ = (
+        UniqueConstraint("currency_pair_id", "timestamp", name="uq_rate_per_pair_and_time"),
+    )
 
     id = Column(Integer, primary_key=True)
-    currency_pair_id = Column(Integer, ForeignKey("currency_pairs.id"), index=True)
-    rate = Column(Float, nullable=False, index=True)
+    currency_pair_id = Column(
+        Integer, ForeignKey("currency_pairs.id", ondelete="CASCADE"), nullable=False
+    )
+    rate = Column(Float, nullable=False)
     # When the quote was valid according to the provider, not when we stored it.
-    timestamp = Column(UTCDateTime, nullable=False, index=True)
+    timestamp = Column(UTCDateTime, nullable=False)
     created_at = Column(UTCDateTime, nullable=False, default=utcnow)
     updated_at = Column(UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow)
