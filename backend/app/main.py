@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .database import Base, SessionLocal, engine
+from .database import SessionLocal, engine
 from .routers import currency
 from .services.exchange_rate_service import fetch_and_store_exchange_rates
 
@@ -41,8 +41,8 @@ async def refresh_rates() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    Base.metadata.create_all(bind=engine)
-
+    # The schema belongs to Alembic. An application that quietly reshapes
+    # its own database at boot is one that hides a failed migration.
     if settings.scheduler_enabled:
         scheduler.add_job(
             refresh_rates,

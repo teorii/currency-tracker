@@ -11,6 +11,11 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "DTZ", "RUF"]
 
+[tool.ruff.lint.isort]
+# The alembic/ directory sits next to app/, so isort would otherwise treat
+# the alembic package itself as first-party.
+known-third-party = ["alembic"]
+
 [tool.ruff.lint.flake8-bugbear]
 # Depends and Query in a default argument is how FastAPI declares things.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
