@@ -86,10 +86,9 @@ def _parse_boundary(value: str, field: str) -> datetime:
             detail=f"Could not read {field} date {value!r}. Use YYYY-MM-DD or an ISO timestamp.",
         ) from None
 
-    if parsed.tzinfo is not None:
-        # Timestamps are stored naive in UTC, and comparing those against an
-        # offset-aware value is an error rather than a conversion.
-        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
+    # A bare date carries no offset, so read it as UTC rather than as
+    # whatever timezone the server happens to sit in.
+    parsed = parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
     if "T" not in value:
         # A bare date as the end of a range should include that whole day.

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,8 +17,7 @@ def usd_eur(db: Session) -> CurrencyPair:
 
 
 def stamp(year: int, month: int, day: int, hour: int = 0) -> datetime:
-    """A naive timestamp, matching what ExchangeRate.timestamp still stores."""
-    return datetime(year, month, day, hour)  # noqa: DTZ001
+    return datetime(year, month, day, hour, tzinfo=UTC)
 
 
 def add_rate(db: Session, pair: CurrencyPair, rate: float, when: datetime) -> None:
