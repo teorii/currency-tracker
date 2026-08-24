@@ -8,8 +8,12 @@ os.environ["EXCHANGE_RATE_API_KEY"] = "test-key"
 os.environ["EXCHANGE_RATE_API_BASE"] = "https://rates.test"
 os.environ["SCHEDULER_ENABLED"] = "false"
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from app.database import Base, SessionLocal, engine
@@ -39,3 +43,23 @@ def db(client: TestClient) -> Session:
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture
+def statements() -> Iterator[contextmanager]:
+    """Records the SQL issued inside the block, so query counts can be asserted."""
+
+    @contextmanager
+    def recorder():
+        recorded: list[str] = []
+
+        def on_execute(conn, cursor, statement, parameters, context, executemany):
+            recorded.append(statement)
+
+        event.listen(engine, "before_cursor_execute", on_execute)
+        try:
+            yield recorded
+        finally:
+            event.remove(engine, "before_cursor_execute", on_execute)
+
+    return recorder

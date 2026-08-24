@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -42,25 +42,37 @@ async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
 @router.get("/latest", response_model=LatestRates)
 async def get_latest_rates(db: Session = Depends(get_db)):
     """The most recent quote held for every tracked pair."""
-    snapshots = []
-
-    for pair in db.query(CurrencyPair).all():
-        latest = (
-            db.query(ExchangeRate)
-            .filter(ExchangeRate.currency_pair_id == pair.id)
-            .order_by(desc(ExchangeRate.timestamp))
-            .first()
+    # Ranking inside the database keeps this to one round trip. Reading the
+    # pairs and then querying each one's newest rate meant a query per pair,
+    # and the provider tracks well over a hundred.
+    ranked = select(
+        ExchangeRate.currency_pair_id,
+        ExchangeRate.rate,
+        ExchangeRate.timestamp,
+        func.row_number()
+        .over(
+            partition_by=ExchangeRate.currency_pair_id,
+            order_by=ExchangeRate.timestamp.desc(),
         )
-        if latest is not None:
-            snapshots.append(
-                RateSnapshot(
-                    base_currency=pair.base_currency,
-                    target_currency=pair.target_currency,
-                    rate=latest.rate,
-                    timestamp=latest.timestamp,
-                )
-            )
+        .label("recency"),
+    ).subquery()
 
+    rows = db.execute(
+        select(
+            CurrencyPair.base_currency,
+            CurrencyPair.target_currency,
+            ranked.c.rate,
+            ranked.c.timestamp,
+        )
+        .join(ranked, ranked.c.currency_pair_id == CurrencyPair.id)
+        .where(ranked.c.recency == 1)
+        .order_by(CurrencyPair.base_currency, CurrencyPair.target_currency)
+    ).all()
+
+    snapshots = [
+        RateSnapshot(base_currency=base, target_currency=target, rate=rate, timestamp=timestamp)
+        for base, target, rate, timestamp in rows
+    ]
     return LatestRates(rates=snapshots, count=len(snapshots))
 
 

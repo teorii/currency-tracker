@@ -156,3 +156,22 @@ def test_history_end_date_includes_the_whole_final_day(
     ).json()
 
     assert body["count"] == 1
+
+
+def test_latest_does_not_scale_queries_with_pair_count(
+    client: TestClient, db: Session, statements
+) -> None:
+    for target in ("EUR", "GBP", "JPY", "CHF", "CAD"):
+        pair = CurrencyPair(base_currency="USD", target_currency=target)
+        db.add(pair)
+        db.commit()
+        db.refresh(pair)
+        add_rate(db, pair, 1.0, stamp(2026, 3, 1, 9))
+        add_rate(db, pair, 1.1, stamp(2026, 3, 2, 9))
+
+    with statements() as recorded:
+        body = client.get("/rates/latest").json()
+
+    selects = [s for s in recorded if s.lstrip().upper().startswith("SELECT")]
+    assert body["count"] == 5
+    assert len(selects) == 1, f"expected a single select, issued {len(selects)}"
