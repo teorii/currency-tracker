@@ -52,8 +52,8 @@ def test_fetching_the_same_quotes_twice_does_not_duplicate_them(
         )
     )
 
-    assert client.post("/rates/fetch-now").json()["stored_count"] == 2
-    assert client.post("/rates/fetch-now").json()["stored_count"] == 0
+    assert client.post("/rates/fetch-now").json()["stored"] == 2
+    assert client.post("/rates/fetch-now").json()["stored"] == 0
 
     assert db.query(CurrencyPair).count() == 2
     assert db.query(ExchangeRate).count() == 2

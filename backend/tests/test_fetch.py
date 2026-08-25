@@ -9,6 +9,9 @@ from app.models import CurrencyPair, ExchangeRate
 
 LIVE = dict(host="rates.test", path="/live")
 
+# Enough distinct codes to make a per-currency query pattern obvious.
+THREE_LETTER_CODES = [f"{a}{b}{c}" for a in "ABCD" for b in "EFG" for c in "HIJKL"]
+
 
 @respx.mock
 def test_fetch_stores_a_pair_per_quote(client: TestClient, db: Session) -> None:
@@ -26,7 +29,7 @@ def test_fetch_stores_a_pair_per_quote(client: TestClient, db: Session) -> None:
 
     body = client.post("/rates/fetch-now").json()
 
-    assert body["stored_count"] == 2
+    assert body["stored"] == 2
     assert {p.target_currency for p in db.query(CurrencyPair).all()} == {"EUR", "GBP"}
     assert db.query(ExchangeRate).count() == 2
 
@@ -102,3 +105,55 @@ def test_a_provider_without_a_timestamp_still_records(client: TestClient, db: Se
 
     assert client.post("/rates/fetch-now").status_code == 200
     assert db.query(ExchangeRate).one().timestamp.tzinfo is not None
+
+
+@respx.mock
+def test_storing_does_not_scale_statements_with_currency_count(
+    client: TestClient, db: Session, statements
+) -> None:
+    quotes = {f"USD{code}": 1.0 + index for index, code in enumerate(THREE_LETTER_CODES)}
+    respx.get(**LIVE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "source": "USD",
+                "timestamp": 1772452800,
+                "quotes": quotes,
+            },
+        )
+    )
+
+    with statements() as recorded:
+        body = client.post("/rates/fetch-now").json()
+
+    assert body["stored"] == len(quotes)
+    assert len(recorded) <= 6, f"{len(quotes)} currencies cost {len(recorded)} statements"
+
+
+@respx.mock
+def test_quotes_that_are_not_a_pair_of_the_base_are_ignored(client: TestClient) -> None:
+    respx.get(**LIVE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "source": "USD",
+                "timestamp": 1772452800,
+                "quotes": {"USDEUR": 0.92, "EURGBP": 0.85, "USDTOOLONG": 1.0, "USDUSD": 1.0},
+            },
+        )
+    )
+
+    assert client.post("/rates/fetch-now").json()["received"] == 1
+
+
+@respx.mock
+def test_a_response_with_nothing_usable_is_a_502(client: TestClient) -> None:
+    respx.get(**LIVE).mock(
+        return_value=httpx.Response(
+            200, json={"success": True, "source": "USD", "quotes": {"EURGBP": 0.85}}
+        )
+    )
+
+    assert client.post("/rates/fetch-now").status_code == 502

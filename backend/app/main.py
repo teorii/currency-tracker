@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import SessionLocal, engine
 from .routers import currency
-from .services.exchange_rate_service import fetch_and_store_exchange_rates
+from .services.rates import refresh_rates
 
 settings = get_settings()
 
@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-async def refresh_rates() -> None:
+async def scheduled_refresh() -> None:
     """Scheduler entry point. Owns its own session because no request is in flight."""
     db = SessionLocal()
     try:
-        result = await fetch_and_store_exchange_rates(db)
-        logger.info("Scheduled refresh stored %d rates", result["stored_count"])
+        result = await refresh_rates(db)
+        logger.info("Scheduled refresh stored %d rates", result.stored)
     except Exception:
         # A failed refresh must not kill the job; the next tick retries.
         logger.exception("Scheduled refresh failed")
@@ -45,7 +45,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # its own database at boot is one that hides a failed migration.
     if settings.scheduler_enabled:
         scheduler.add_job(
-            refresh_rates,
+            scheduled_refresh,
             trigger=CronTrigger(minute=settings.fetch_schedule_minute),
             id="refresh_rates",
             name="Hourly exchange rate refresh",

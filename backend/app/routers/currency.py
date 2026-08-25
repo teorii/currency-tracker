@@ -16,7 +16,8 @@ from ..schemas import (
     RateHistory,
     RateSnapshot,
 )
-from ..services.exchange_rate_service import ExchangeRateError, fetch_and_store_exchange_rates
+from ..services.provider import ExchangeRateError
+from ..services.rates import refresh_rates
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def code(description: str) -> Any:
 async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
     """Pull the current quotes now rather than waiting for the hourly job."""
     try:
-        return await fetch_and_store_exchange_rates(db)
+        return await refresh_rates(db)
     except ExchangeRateError as exc:
         # The provider failing is not this service failing, so report it as a
         # bad gateway rather than an internal error.

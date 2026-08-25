@@ -40,11 +40,12 @@ class RateHistory(BaseModel):
 
 
 class FetchResult(BaseModel):
-    message: str
+    model_config = ConfigDict(from_attributes=True)
+
     base_currency: CurrencyCode
-    timestamp: datetime
-    rates_count: int
-    stored_count: int
+    quoted_at: datetime
+    received: int
+    stored: int
 
 
 class Deleted(BaseModel):
