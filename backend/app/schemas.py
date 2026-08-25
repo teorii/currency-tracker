@@ -48,6 +48,26 @@ class FetchResult(BaseModel):
     stored: int
 
 
+class TrackedPair(BaseModel):
+    base_currency: CurrencyCode
+    target_currency: CurrencyCode
+    first_seen: datetime
+    observations: int
+    latest_quote_at: datetime | None = None
+
+
+class TrackedPairs(BaseModel):
+    pairs: list[TrackedPair]
+    count: int
+
+
+class Health(BaseModel):
+    status: Literal["ok", "degraded"]
+    database: Literal["up", "down"]
+    tracked_pairs: int | None = None
+    latest_quote_at: datetime | None = None
+
+
 class Conversion(BaseModel):
     base_currency: CurrencyCode
     target_currency: CurrencyCode

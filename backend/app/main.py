@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import SessionLocal, engine
-from .routers import currency
+from .routers import currency, health
 from .services.rates import refresh_rates
 
 settings = get_settings()
@@ -79,6 +79,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health.router)
 app.include_router(currency.router)
 
 

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -16,6 +16,8 @@ from ..schemas import (
     LatestRates,
     RateHistory,
     RateSnapshot,
+    TrackedPair,
+    TrackedPairs,
 )
 from ..services.conversion import derive_rate
 from ..services.provider import ExchangeRateError
@@ -65,6 +67,35 @@ async def get_latest_rates(db: Session = Depends(get_db)):
         for base, target, rate, timestamp in rows
     ]
     return LatestRates(rates=snapshots, count=len(snapshots))
+
+
+@router.get("/pairs", response_model=TrackedPairs)
+async def list_pairs(db: Session = Depends(get_db)):
+    """Every pair held, with how much history each one has behind it."""
+    rows = db.execute(
+        select(
+            CurrencyPair.base_currency,
+            CurrencyPair.target_currency,
+            CurrencyPair.created_at,
+            func.count(ExchangeRate.id),
+            func.max(ExchangeRate.timestamp),
+        )
+        .outerjoin(ExchangeRate, ExchangeRate.currency_pair_id == CurrencyPair.id)
+        .group_by(CurrencyPair.id, CurrencyPair.base_currency, CurrencyPair.target_currency)
+        .order_by(CurrencyPair.base_currency, CurrencyPair.target_currency)
+    ).all()
+
+    pairs = [
+        TrackedPair(
+            base_currency=base,
+            target_currency=target,
+            first_seen=first_seen,
+            observations=observations,
+            latest_quote_at=latest,
+        )
+        for base, target, first_seen, observations, latest in rows
+    ]
+    return TrackedPairs(pairs=pairs, count=len(pairs))
 
 
 @router.get("/convert", response_model=Conversion)
