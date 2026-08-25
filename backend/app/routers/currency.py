@@ -1,8 +1,10 @@
+import csv
+import io
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -150,15 +152,7 @@ def _parse_boundary(value: str, field: str) -> datetime:
     return parsed
 
 
-@router.get("/history", response_model=RateHistory)
-async def get_rate_history(
-    base: str = code("Base currency code, for example USD"),
-    target: str = code("Target currency code, for example EUR"),
-    start: str = Query(..., description="Start of the range, YYYY-MM-DD or ISO timestamp"),
-    end: str = Query(..., description="End of the range, YYYY-MM-DD or ISO timestamp"),
-    db: Session = Depends(get_db),
-):
-    """Every quote recorded for one pair between two points in time."""
+def _resolve_range(start: str, end: str) -> tuple[datetime, datetime]:
     start_at = _parse_boundary(start, "start")
     if "T" not in start:
         start_at = start_at.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -169,7 +163,11 @@ async def get_rate_history(
             status_code=400, detail="The start date must not be after the end date."
         )
 
-    currency_pair = (
+    return start_at, end_at
+
+
+def _require_pair(db: Session, base: str, target: str) -> CurrencyPair:
+    pair = (
         db.query(CurrencyPair)
         .filter(
             CurrencyPair.base_currency == base.upper(),
@@ -178,22 +176,42 @@ async def get_rate_history(
         .first()
     )
 
-    if currency_pair is None:
+    if pair is None:
         raise HTTPException(
             status_code=404,
             detail=f"Currency pair {base.upper()}/{target.upper()} is not tracked.",
         )
 
-    rates = (
+    return pair
+
+
+def _rates_between(
+    db: Session, pair: CurrencyPair, start_at: datetime, end_at: datetime
+) -> list[ExchangeRate]:
+    return (
         db.query(ExchangeRate)
         .filter(
-            ExchangeRate.currency_pair_id == currency_pair.id,
+            ExchangeRate.currency_pair_id == pair.id,
             ExchangeRate.timestamp >= start_at,
             ExchangeRate.timestamp <= end_at,
         )
         .order_by(ExchangeRate.timestamp)
         .all()
     )
+
+
+@router.get("/history", response_model=RateHistory)
+async def get_rate_history(
+    base: str = code("Base currency code, for example USD"),
+    target: str = code("Target currency code, for example EUR"),
+    start: str = Query(..., description="Start of the range, YYYY-MM-DD or ISO timestamp"),
+    end: str = Query(..., description="End of the range, YYYY-MM-DD or ISO timestamp"),
+    db: Session = Depends(get_db),
+):
+    """Every quote recorded for one pair between two points in time."""
+    start_at, end_at = _resolve_range(start, end)
+    pair = _require_pair(db, base, target)
+    rates = _rates_between(db, pair, start_at, end_at)
 
     return RateHistory(
         base_currency=base,
@@ -205,6 +223,41 @@ async def get_rate_history(
             for rate in rates
         ],
         count=len(rates),
+    )
+
+
+@router.get(
+    "/history.csv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "Rate history as CSV"}},
+)
+async def export_rate_history(
+    base: str = code("Base currency code, for example USD"),
+    target: str = code("Target currency code, for example EUR"),
+    start: str = Query(..., description="Start of the range, YYYY-MM-DD or ISO timestamp"),
+    end: str = Query(..., description="End of the range, YYYY-MM-DD or ISO timestamp"),
+    db: Session = Depends(get_db),
+):
+    """The same history as a spreadsheet download."""
+    start_at, end_at = _resolve_range(start, end)
+    pair = _require_pair(db, base, target)
+    rates = _rates_between(db, pair, start_at, end_at)
+
+    # Built in memory rather than streamed: the request-scoped session is closed
+    # once the handler returns, and a generator would still be reading from it.
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(("timestamp", "base_currency", "target_currency", "rate"))
+    for rate in rates:
+        writer.writerow(
+            (rate.timestamp.isoformat(), pair.base_currency, pair.target_currency, rate.rate)
+        )
+
+    filename = f"{pair.base_currency}-{pair.target_currency}_{start_at:%Y%m%d}-{end_at:%Y%m%d}.csv"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
