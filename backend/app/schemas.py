@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
@@ -46,6 +46,18 @@ class FetchResult(BaseModel):
     quoted_at: datetime
     received: int
     stored: int
+
+
+class Conversion(BaseModel):
+    base_currency: CurrencyCode
+    target_currency: CurrencyCode
+    amount: float
+    rate: float
+    converted: float
+    quoted_at: datetime
+    # direct is a rate the provider quoted, cross was computed through `via`.
+    basis: Literal["identity", "direct", "inverse", "cross"]
+    via: CurrencyCode | None = None
 
 
 class Deleted(BaseModel):

@@ -3,12 +3,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import CurrencyPair, ExchangeRate
 from ..schemas import (
+    Conversion,
     Deleted,
     FetchResult,
     HistoryPoint,
@@ -16,8 +17,9 @@ from ..schemas import (
     RateHistory,
     RateSnapshot,
 )
+from ..services.conversion import derive_rate
 from ..services.provider import ExchangeRateError
-from ..services.rates import refresh_rates
+from ..services.rates import latest_rate_rows, refresh_rates
 
 logger = logging.getLogger(__name__)
 
@@ -44,20 +46,8 @@ async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
 async def get_latest_rates(db: Session = Depends(get_db)):
     """The most recent quote held for every tracked pair."""
     # Ranking inside the database keeps this to one round trip. Reading the
-    # pairs and then querying each one's newest rate meant a query per pair,
-    # and the provider tracks well over a hundred.
-    ranked = select(
-        ExchangeRate.currency_pair_id,
-        ExchangeRate.rate,
-        ExchangeRate.timestamp,
-        func.row_number()
-        .over(
-            partition_by=ExchangeRate.currency_pair_id,
-            order_by=ExchangeRate.timestamp.desc(),
-        )
-        .label("recency"),
-    ).subquery()
-
+    # pairs and then querying each one's newest rate meant a query per pair.
+    ranked = latest_rate_rows()
     rows = db.execute(
         select(
             CurrencyPair.base_currency,
@@ -75,6 +65,37 @@ async def get_latest_rates(db: Session = Depends(get_db)):
         for base, target, rate, timestamp in rows
     ]
     return LatestRates(rates=snapshots, count=len(snapshots))
+
+
+@router.get("/convert", response_model=Conversion)
+async def convert(
+    base: str = code("Currency to convert from, for example EUR"),
+    target: str = code("Currency to convert into, for example JPY"),
+    amount: float = Query(1.0, ge=0, description="How much of the base currency"),
+    db: Session = Depends(get_db),
+):
+    """Price one currency against another, deriving the rate when it is not quoted."""
+    derived = derive_rate(db, base.upper(), target.upper())
+
+    if derived is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No rate held that prices {base.upper()} against {target.upper()}, "
+                "directly or through another currency."
+            ),
+        )
+
+    return Conversion(
+        base_currency=base,
+        target_currency=target,
+        amount=amount,
+        rate=derived.rate,
+        converted=amount * derived.rate,
+        quoted_at=derived.quoted_at,
+        basis=derived.basis,
+        via=derived.via,
+    )
 
 
 def _parse_boundary(value: str, field: str) -> datetime:

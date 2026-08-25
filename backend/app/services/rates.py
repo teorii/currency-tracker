@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Subquery, func, select
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,25 @@ logger = logging.getLogger(__name__)
 
 # Both supported backends spell "insert unless it is already there" this way.
 _UPSERT_BUILDERS = {"postgresql": postgresql.insert, "sqlite": sqlite.insert}
+
+
+def latest_rate_rows() -> Subquery:
+    """Each pair's newest rate, ranked in the database rather than in a loop.
+
+    Callers filter on recency == 1. Shared so the read endpoints and the
+    conversion logic cannot drift on what "latest" means.
+    """
+    return select(
+        ExchangeRate.currency_pair_id,
+        ExchangeRate.rate,
+        ExchangeRate.timestamp,
+        func.row_number()
+        .over(
+            partition_by=ExchangeRate.currency_pair_id,
+            order_by=ExchangeRate.timestamp.desc(),
+        )
+        .label("recency"),
+    ).subquery()
 
 
 @dataclass(frozen=True)
