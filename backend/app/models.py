@@ -17,10 +17,11 @@ from .database import Base
 class UTCDateTime(TypeDecorator):
     """A datetime column that is timezone-aware UTC on the way in and on the way out.
 
-    Postgres hands back aware values for TIMESTAMPTZ while SQLite has no
-    concept of a timezone and hands back naive ones. Without this the same
-    column yields different types depending on the backend, which is the kind
-    of difference that shows up in production and not in the tests.
+    SQLite has no timezone type. It stores whatever wall clock reading it is
+    given and hands back a naive value, so an offset silently disappears on the
+    way in and comparisons against aware values fail on the way out. This
+    normalises both directions and refuses naive input outright, which is the
+    only way the column means one thing.
     """
 
     impl = DateTime(timezone=True)

@@ -9,14 +9,18 @@ from .config import get_settings
 
 
 def _engine_options(url: str) -> dict[str, Any]:
-    if url.startswith("sqlite"):
-        # SQLite guards against cross-thread use, which FastAPI's threadpool
-        # trips immediately. StaticPool keeps an in-memory database alive for
-        # more than the one connection that created it.
-        return {"connect_args": {"check_same_thread": False}, "poolclass": StaticPool}
-    # One round trip per checkout, in exchange for never handing out a
-    # connection the server has already dropped.
-    return {"pool_pre_ping": True}
+    options: dict[str, Any] = {
+        # Requests are served from a threadpool, and SQLite refuses by default
+        # to let a connection be used from any thread but the one that made it.
+        "connect_args": {"check_same_thread": False},
+    }
+
+    if url in {"sqlite://", "sqlite:///:memory:"}:
+        # An in-memory database exists only inside its own connection, so every
+        # caller has to be handed the same one. This is what the tests run on.
+        options["poolclass"] = StaticPool
+
+    return options
 
 
 _database_url = get_settings().database_url

@@ -3,16 +3,13 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import Subquery, func, select
-from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from ..models import CurrencyPair, ExchangeRate
 from .provider import LiveQuotes, fetch_live_quotes
 
 logger = logging.getLogger(__name__)
-
-# Both supported backends spell "insert unless it is already there" this way.
-_UPSERT_BUILDERS = {"postgresql": postgresql.insert, "sqlite": sqlite.insert}
 
 
 def latest_rate_rows() -> Subquery:
@@ -51,13 +48,7 @@ def _insert_ignoring_duplicates(db: Session, model: type, rows: list[dict]) -> i
     if not rows:
         return 0
 
-    dialect = db.get_bind().dialect.name
-    try:
-        build_insert = _UPSERT_BUILDERS[dialect]
-    except KeyError:
-        raise RuntimeError(f"No conflict handling defined for dialect {dialect!r}.") from None
-
-    result = db.execute(build_insert(model).values(rows).on_conflict_do_nothing())
+    result = db.execute(insert(model).values(rows).on_conflict_do_nothing())
     return result.rowcount
 
 

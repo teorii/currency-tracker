@@ -17,7 +17,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str
+    # Defaults to a file beside the application so the project runs with no
+    # configuration at all. as_posix keeps the URL valid on Windows, where a
+    # native path would put backslashes in it.
+    database_url: str = f"sqlite:///{(BACKEND_DIR / 'currency_tracker.db').as_posix()}"
     exchange_rate_api_key: str
 
     # The access key travels as a query parameter, so plain HTTP would hand it to
