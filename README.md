@@ -20,7 +20,7 @@ A full-stack application for tracking currency exchange rates with real-time dat
 
 ### Backend
 - **FastAPI**: Modern Python web framework
-- **PostgreSQL**: Relational database for data storage
+- **SQLite**: Embedded database, no server to run
 - **SQLAlchemy**: ORM for database operations
 - **APScheduler**: Background job scheduling
 - **httpx**: Async HTTP client for API calls
@@ -38,7 +38,6 @@ A full-stack application for tracking currency exchange rates with real-time dat
 You'll need a few things installed before getting started:
 
 - **Python 3.8+** ([Download](https://www.python.org/downloads/))
-- **PostgreSQL 12+** ([Download](https://www.postgresql.org/download/))
 - **Node.js 16+** and npm ([Download](https://nodejs.org/))
 
 ## Getting Started
@@ -71,15 +70,14 @@ Then activate it:
 pip install -r requirements.txt
 ```
 
-#### Set Up PostgreSQL Database
+#### Database
 
-Create a new database called `currency_tracker`. You can do this through pgAdmin or the command line:
+There is nothing to set up. The application uses SQLite and creates
+`backend/currency_tracker.db` on first run. Apply the schema with:
 
 ```bash
-psql -U postgres -c "CREATE DATABASE currency_tracker;"
+alembic upgrade head
 ```
-
-The tables will be created automatically when you start the server, so you don't need to run any migration scripts.
 
 #### Configure Environment Variables
 
@@ -92,9 +90,6 @@ cp .env.example .env
 Now edit `.env` and add your actual values:
 
 ```env
-# Database Configuration
-DATABASE_URL=postgresql://postgres:your_password@localhost:5432/currency_tracker
-
 # Exchange Rate API Configuration
 EXCHANGE_RATE_API_BASE=http://api.exchangerate.host
 EXCHANGE_RATE_API_KEY=your_api_key_here
@@ -109,11 +104,11 @@ LOG_LEVEL=INFO
 ```
 
 Make sure to:
-- Replace `your_password` with your actual PostgreSQL password
 - Replace `your_api_key_here` with your exchange rate API key (get one from [exchangerate.host](https://exchangerate.host))
 - Never commit the `.env` file to version control
 
-Both `DATABASE_URL` and `EXCHANGE_RATE_API_KEY` are required - the app won't start without them.
+Only `EXCHANGE_RATE_API_KEY` is required. `DATABASE_URL` is optional and
+defaults to a SQLite file beside the application.
 
 #### Start the Backend Server
 
@@ -164,8 +159,8 @@ currency-tracker/
 │   │   │   └── currency.py       # API endpoints
 │   │   └── services/
 │   │       └── exchange_rate_service.py  # Business logic
-│   ├── migrations/
-│   │   └── 001_initial_schema.sql  # Database migration script
+│   ├── alembic/
+│   │   └── versions/               # Alembic revisions
 │   ├── requirements.txt          # Python dependencies
 │   └── .env.example              # Environment variables template
 │
@@ -254,18 +249,16 @@ curl -X DELETE http://localhost:8000/rates/pairs/USD/EUR
 
 ## Troubleshooting
 
-### Database Connection Issues
+### Database Issues
 
-**Error: `FATAL: password authentication failed`**
+**Error: `no such table: currency_pairs`**
 
-- Double-check your PostgreSQL password in `.env`
-- Make sure the `DATABASE_URL` format is correct: `postgresql://user:password@host:port/database`
-- Verify PostgreSQL is running: `pg_isready` or check your service status
+The schema has not been applied. Run `alembic upgrade head` from `backend/`.
 
-**Error: `database "currency_tracker" does not exist`**
+**Starting over**
 
-- Create the database: `psql -U postgres -c "CREATE DATABASE currency_tracker;"`
-- Or run the SQL migration script manually if you prefer
+The data is all re-fetchable, so deleting `backend/currency_tracker.db` and
+running `alembic upgrade head` again is a valid reset.
 
 ### Port Already in Use
 
@@ -356,7 +349,6 @@ Never commit `.env` files to version control. Use the `.env.example` file as a t
 2. Use a production ASGI server like Gunicorn with Uvicorn workers
 3. Configure proper CORS origins for your domain
 4. Use environment variables for all sensitive data
-5. Set up database connection pooling
 
 **Frontend:**
 1. Build for production: `npm run build`

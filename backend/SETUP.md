@@ -1,62 +1,53 @@
-# Backend Setup Guide
+# Backend Setup
 
-Quick reference guide for setting up the backend.
+## Requirements
 
-## Environment Variables
+Python 3.11 or newer, and an access key from [exchangerate.host](https://exchangerate.host).
+There is no database server to install.
 
-Create a `.env` file in the `backend` directory:
-
-```env
-# Database Configuration
-DATABASE_URL=postgresql://postgres:your_password@localhost:5432/currency_tracker
-
-# Exchange Rate API Configuration
-EXCHANGE_RATE_API_BASE=http://api.exchangerate.host
-EXCHANGE_RATE_API_KEY=your_api_key_here  # REQUIRED - Get your key from exchangerate.host
-
-# CORS Configuration
-CORS_ORIGINS=http://localhost:5173
-
-# Optional
-PORT=8000
-HOST=0.0.0.0
-LOG_LEVEL=INFO
-```
-
-## Quick Start Commands
+## Quick start
 
 ```bash
-# 1. Create virtual environment
 python -m venv venv
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS and Linux
 
-# 2. Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
-
-# 3. Install dependencies
 pip install -r requirements.txt
+cp .env.example .env           # then fill in EXCHANGE_RATE_API_KEY
 
-# 4. Create database (using psql)
-psql -U postgres -c "CREATE DATABASE currency_tracker;"
-
-# 5. Run migrations (optional - tables auto-create on startup)
-psql -U postgres -d currency_tracker -f migrations/001_initial_schema.sql
-
-# 6. Start server
+alembic upgrade head
 python -m app.main
 ```
 
-## Verify Setup
+The database is created at `backend/currency_tracker.db` on first run.
+
+## Configuration
+
+Every value in `.env.example` except the provider key has a working default,
+so the only line that has to be filled in is `EXCHANGE_RATE_API_KEY`. Missing
+required configuration is reported by name at startup rather than as a
+traceback.
+
+Set `DATABASE_URL` to move the database file elsewhere. Set
+`SCHEDULER_ENABLED=false` to run the API without the hourly refresh job.
+
+## Checking it works
 
 ```bash
-# Test API
-curl http://localhost:8000
-
-# Test latest rates endpoint
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/rates/fetch-now
 curl http://localhost:8000/rates/latest
-
-# View API documentation
-# Open http://localhost:8000/docs in browser
 ```
+
+Interactive documentation is at http://localhost:8000/docs.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+ruff check .
+```
+
+The suite runs against an in-memory database and never touches the network or
+the development database file.

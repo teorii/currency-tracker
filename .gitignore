@@ -39,8 +39,10 @@ dist-ssr/
 Thumbs.db
 *.log
 
-# Database
+# Database. WAL leaves -wal and -shm alongside the database file.
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
