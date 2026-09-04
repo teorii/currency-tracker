@@ -73,8 +73,8 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
       dataByDate.get(dateKey)!.rates.push(Number(item.rate));
     });
 
-    chartData = Array.from(dataByDate.entries())
-      .map(([dateKey, { rates, timestamp }]) => ({
+    chartData = Array.from(dataByDate.values())
+      .map(({ rates, timestamp }) => ({
         date: new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         rate: rates.reduce((a, b) => a + b, 0) / rates.length,
         fullDate: new Date(timestamp).getTime(),
@@ -179,7 +179,7 @@ const PairHistory = ({ base, target }: PairHistoryProps) => {
                 padding: '12px'
               }}
               labelStyle={{ color: '#a0a0a0', marginBottom: '8px', fontSize: '12px' }}
-              formatter={(value: number) => [value.toFixed(4), 'rate']}
+              formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : '', 'rate']}
               labelFormatter={(label) => `date: ${label}`}
             />
             <Legend 
