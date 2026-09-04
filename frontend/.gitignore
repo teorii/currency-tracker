@@ -16,6 +16,7 @@ pnpm-lock.yaml
 dist
 dist-ssr
 build
+coverage
 *.local
 
 # Environment variables
