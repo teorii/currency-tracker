@@ -1,25 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import PairList from './components/PairList';
 import PairHistory from './components/PairHistory';
 import { useGetLatestRatesQuery } from './store/api/ratesApi';
 
-// Auto-select first pair if available and none selected
+interface Pair {
+  base: string;
+  target: string;
+}
+
 function App() {
   const { data } = useGetLatestRatesQuery();
-  const [selectedPair, setSelectedPair] = useState<{ base: string; target: string } | null>(null);
+  const [chosenPair, setChosenPair] = useState<Pair | null>(null);
 
-  useEffect(() => {
-    if (!selectedPair && data?.rates && data.rates.length > 0) {
-      const firstRate = data.rates[0];
-      setSelectedPair({ 
-        base: firstRate.base_currency, 
-        target: firstRate.target_currency 
-      });
-    }
-  }, [data, selectedPair]);
+  // Derived rather than stored, so the first pair shows as soon as rates
+  // arrive without an effect writing state on the render that receives them.
+  const firstRate = data?.rates[0];
+  const selectedPair =
+    chosenPair ??
+    (firstRate ? { base: firstRate.base_currency, target: firstRate.target_currency } : null);
 
   const handlePairClick = (base: string, target: string) => {
-    setSelectedPair({ base, target });
+    setChosenPair({ base, target });
   };
 
   return (
