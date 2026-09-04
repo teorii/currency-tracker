@@ -1,63 +1,156 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
-export interface Rate {
+/** ISO 8601 string as the API serialises datetimes. */
+type Timestamp = string;
+
+export interface RateSnapshot {
   base_currency: string;
   target_currency: string;
   rate: number;
-  timestamp: string;
+  timestamp: Timestamp;
 }
 
-export interface LatestRatesResponse {
-  rates: Rate[];
+export interface LatestRates {
+  rates: RateSnapshot[];
   count: number;
 }
 
-export interface HistoryData {
+export interface HistoryPoint {
   date: string;
-  timestamp: string;
+  timestamp: Timestamp;
   rate: number;
 }
 
-export interface HistoryResponse {
+export interface RateHistory {
   base_currency: string;
   target_currency: string;
-  start_date: string;
-  end_date: string;
-  history: HistoryData[];
+  start_date: Timestamp;
+  end_date: Timestamp;
+  history: HistoryPoint[];
   count: number;
 }
+
+export interface TrackedPair {
+  base_currency: string;
+  target_currency: string;
+  first_seen: Timestamp;
+  observations: number;
+  latest_quote_at: Timestamp | null;
+}
+
+export interface TrackedPairs {
+  pairs: TrackedPair[];
+  count: number;
+}
+
+/** How a rate was arrived at. `cross` means it was computed through `via`. */
+export type ConversionBasis = 'identity' | 'direct' | 'inverse' | 'cross';
+
+export interface Conversion {
+  base_currency: string;
+  target_currency: string;
+  amount: number;
+  rate: number;
+  converted: number;
+  quoted_at: Timestamp;
+  basis: ConversionBasis;
+  via: string | null;
+}
+
+export interface FetchResult {
+  base_currency: string;
+  quoted_at: Timestamp;
+  received: number;
+  stored: number;
+}
+
+export interface Health {
+  status: 'ok' | 'degraded';
+  database: 'up' | 'down';
+  tracked_pairs: number | null;
+  latest_quote_at: Timestamp | null;
+}
+
+export interface Deleted {
+  message: string;
+}
+
+export interface HistoryRange {
+  base: string;
+  target: string;
+  start: string;
+  end: string;
+}
+
+export interface ConvertRequest {
+  base: string;
+  target: string;
+  amount?: number;
+}
+
+export interface PairRef {
+  base: string;
+  target: string;
+}
+
+/** A URL for the CSV export, for use as an href rather than a fetch. */
+export const historyCsvUrl = ({ base, target, start, end }: HistoryRange): string =>
+  `${API_BASE_URL}/rates/history.csv?${new URLSearchParams({ base, target, start, end })}`;
 
 const ratesApi = createApi({
   reducerPath: 'ratesApi',
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
-  tagTypes: ['Rates'],
+  tagTypes: ['Rates', 'Pairs'],
   endpoints: (builder) => ({
-    getLatestRates: builder.query<LatestRatesResponse, void>({
+    getHealth: builder.query<Health, void>({
+      query: () => '/health',
+    }),
+    getLatestRates: builder.query<LatestRates, void>({
       query: () => '/rates/latest',
       providesTags: ['Rates'],
     }),
-    getHistory: builder.query<HistoryResponse, { base: string; target: string; start: string; end: string }>({
-      query: ({ base, target, start, end }) => 
-        `/rates/history?base=${base}&target=${target}&start=${start}&end=${end}`,
+    getPairs: builder.query<TrackedPairs, void>({
+      query: () => '/rates/pairs',
+      providesTags: ['Pairs'],
     }),
-    fetchRates: builder.mutation<any, void>({
-      query: () => ({
-        url: '/rates/fetch-now',
-        method: 'POST',
+    getHistory: builder.query<RateHistory, HistoryRange>({
+      query: ({ base, target, start, end }) => ({
+        url: '/rates/history',
+        params: { base, target, start, end },
       }),
-      invalidatesTags: ['Rates'],
+      providesTags: ['Rates'],
     }),
-    deletePair: builder.mutation<any, { base: string; target: string }>({
+    convert: builder.query<Conversion, ConvertRequest>({
+      query: ({ base, target, amount = 1 }) => ({
+        url: '/rates/convert',
+        params: { base, target, amount },
+      }),
+      providesTags: ['Rates'],
+    }),
+    fetchRates: builder.mutation<FetchResult, void>({
+      query: () => ({ url: '/rates/fetch-now', method: 'POST' }),
+      invalidatesTags: ['Rates', 'Pairs'],
+    }),
+    deletePair: builder.mutation<Deleted, PairRef>({
       query: ({ base, target }) => ({
         url: `/rates/pairs/${base}/${target}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Rates'],
+      invalidatesTags: ['Rates', 'Pairs'],
     }),
   }),
 });
 
-export const { useGetLatestRatesQuery, useGetHistoryQuery, useFetchRatesMutation, useDeletePairMutation } = ratesApi;
+export const {
+  useGetHealthQuery,
+  useGetLatestRatesQuery,
+  useGetPairsQuery,
+  useGetHistoryQuery,
+  useConvertQuery,
+  useFetchRatesMutation,
+  useDeletePairMutation,
+} = ratesApi;
+
 export default ratesApi;
