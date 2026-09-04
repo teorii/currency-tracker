@@ -7,9 +7,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependencies
+# Dependencies. The lockfile is tracked; it is what makes an install reproducible.
 node_modules
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
