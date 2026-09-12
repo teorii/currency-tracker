@@ -2,28 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+@layer base {
+  html {
+    color-scheme: dark;
+  }
 
-body {
-  margin: 0;
-  font-family: "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "Source Code Pro", monospace;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: #0a0a0a;
-  color: #e5e5e5;
-  font-weight: 300;
-  letter-spacing: -0.01em;
-}
+  body {
+    @apply bg-surface text-ink font-mono text-[13px] leading-5 antialiased;
+  }
 
-@layer utilities {
-  .text-gradient {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  /* Numbers line up in columns; the one large figure on screen opts out. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-surface;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-line-strong rounded-full border-[3px] border-solid border-surface;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-dim;
   }
 }
