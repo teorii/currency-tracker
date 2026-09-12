@@ -15,6 +15,12 @@ class RateSnapshot(BaseModel):
     target_currency: CurrencyCode
     rate: float
     timestamp: datetime
+    # Fractional change against the oldest quote inside the trailing window,
+    # or None when only one quote falls inside it.
+    change_24h: float | None = None
+    # Every quote inside the trailing window, oldest first. Empty until a
+    # second refresh has happened.
+    sparkline: list[float] = []
 
 
 class LatestRates(BaseModel):

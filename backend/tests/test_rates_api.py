@@ -173,4 +173,55 @@ def test_latest_does_not_scale_queries_with_pair_count(
 
     selects = [s for s in recorded if s.lstrip().upper().startswith("SELECT")]
     assert body["count"] == 5
-    assert len(selects) == 1, f"expected a single select, issued {len(selects)}"
+    # One for the newest rate per pair, one for the trailing window behind the
+    # sparklines. Neither grows with the number of pairs.
+    assert len(selects) == 2, f"expected two selects, issued {len(selects)}"
+
+
+def test_latest_reports_movement_over_the_trailing_day(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 1, 12))
+    add_rate(db, usd_eur, 0.91, stamp(2026, 3, 1, 18))
+    add_rate(db, usd_eur, 0.99, stamp(2026, 3, 2, 12))
+
+    snapshot = client.get("/rates/latest").json()["rates"][0]
+
+    assert snapshot["sparkline"] == [0.90, 0.91, 0.99]
+    assert snapshot["change_24h"] == pytest.approx((0.99 - 0.90) / 0.90)
+
+
+def test_latest_ignores_quotes_older_than_the_window(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.50, stamp(2026, 2, 20, 12))
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 1, 13))
+    add_rate(db, usd_eur, 0.99, stamp(2026, 3, 2, 12))
+
+    snapshot = client.get("/rates/latest").json()["rates"][0]
+
+    assert snapshot["sparkline"] == [0.90, 0.99]
+    assert snapshot["change_24h"] == pytest.approx((0.99 - 0.90) / 0.90)
+
+
+def test_latest_has_no_change_until_a_second_quote_exists(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.90, stamp(2026, 3, 2, 12))
+
+    snapshot = client.get("/rates/latest").json()["rates"][0]
+
+    assert snapshot["change_24h"] is None
+    assert snapshot["sparkline"] == [0.90]
+
+
+def test_the_window_follows_the_newest_quote_not_the_clock(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    """A refresh that stopped weeks ago should still show its last day of movement."""
+    add_rate(db, usd_eur, 0.80, stamp(2025, 1, 1, 9))
+    add_rate(db, usd_eur, 0.88, stamp(2025, 1, 2, 8))
+
+    snapshot = client.get("/rates/latest").json()["rates"][0]
+
+    assert snapshot["change_24h"] == pytest.approx(0.1)

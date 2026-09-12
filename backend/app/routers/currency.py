@@ -1,7 +1,7 @@
 import csv
 import io
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -46,14 +46,18 @@ async def fetch_exchange_rates_now(db: Session = Depends(get_db)):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+SPARKLINE_WINDOW = timedelta(hours=24)
+
+
 @router.get("/latest", response_model=LatestRates)
 async def get_latest_rates(db: Session = Depends(get_db)):
-    """The most recent quote held for every tracked pair."""
-    # Ranking inside the database keeps this to one round trip. Reading the
-    # pairs and then querying each one's newest rate meant a query per pair.
+    """The most recent quote for every tracked pair, with its recent movement."""
+    # Two statements however many pairs there are. Reading the pairs and then
+    # querying each one's newest rate meant a query per pair.
     ranked = latest_rate_rows()
     rows = db.execute(
         select(
+            CurrencyPair.id,
             CurrencyPair.base_currency,
             CurrencyPair.target_currency,
             ranked.c.rate,
@@ -64,10 +68,33 @@ async def get_latest_rates(db: Session = Depends(get_db)):
         .order_by(CurrencyPair.base_currency, CurrencyPair.target_currency)
     ).all()
 
-    snapshots = [
-        RateSnapshot(base_currency=base, target_currency=target, rate=rate, timestamp=timestamp)
-        for base, target, rate, timestamp in rows
-    ]
+    # The window is anchored on the newest quote held, not the wall clock, so
+    # a refresh that has been down for a day still shows the last real movement.
+    newest = max((timestamp for *_, timestamp in rows), default=None)
+    recent: dict[int, list[float]] = {}
+    if newest is not None:
+        window = db.execute(
+            select(ExchangeRate.currency_pair_id, ExchangeRate.rate)
+            .where(ExchangeRate.timestamp >= newest - SPARKLINE_WINDOW)
+            .order_by(ExchangeRate.currency_pair_id, ExchangeRate.timestamp)
+        ).all()
+        for pair_id, rate in window:
+            recent.setdefault(pair_id, []).append(rate)
+
+    snapshots = []
+    for pair_id, base, target, rate, timestamp in rows:
+        points = recent.get(pair_id, [])
+        earliest = points[0] if len(points) > 1 else None
+        snapshots.append(
+            RateSnapshot(
+                base_currency=base,
+                target_currency=target,
+                rate=rate,
+                timestamp=timestamp,
+                change_24h=(rate - earliest) / earliest if earliest else None,
+                sparkline=points,
+            )
+        )
     return LatestRates(rates=snapshots, count=len(snapshots))
 
 
