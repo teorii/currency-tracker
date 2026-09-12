@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import PairList from './components/PairList';
+import Watchlist from './components/Watchlist';
 import PairHistory from './components/PairHistory';
 import { useGetLatestRatesQuery } from './store/api/ratesApi';
 
@@ -18,10 +18,6 @@ function App() {
   const selectedPair =
     chosenPair ??
     (firstRate ? { base: firstRate.base_currency, target: firstRate.target_currency } : null);
-
-  const handlePairClick = (base: string, target: string) => {
-    setChosenPair({ base, target });
-  };
 
   return (
     <div className="h-screen bg-[#0a0a0a] text-[#e5e5e5] flex flex-col overflow-hidden">
@@ -61,7 +57,7 @@ function App() {
 
         {/* Right Sidebar - Watchlist */}
         <div className="w-80 bg-[#131722] border-l border-white/5 flex flex-col overflow-hidden">
-          <PairList onPairClick={handlePairClick} selectedPair={selectedPair} />
+          <Watchlist selected={selectedPair} onSelect={setChosenPair} />
         </div>
       </div>
     </div>

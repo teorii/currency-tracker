@@ -19,7 +19,7 @@ describe('App', () => {
   it('switches to a pair the user picks', async () => {
     renderWithStore(<App />);
 
-    await userEvent.click(await screen.findByText('USD/JPY'));
+    await userEvent.click(await screen.findByRole('button', { name: /^USD\/JPY/ }));
 
     expect(await screen.findAllByText('USD/JPY')).not.toHaveLength(0);
   });

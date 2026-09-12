@@ -10,6 +10,10 @@ export interface RateSnapshot {
   target_currency: string;
   rate: number;
   timestamp: Timestamp;
+  /** Fractional change over the trailing day, or null until a second quote exists. */
+  change_24h: number | null;
+  /** Quotes inside the trailing day, oldest first. Empty until a second refresh. */
+  sparkline: number[];
 }
 
 export interface LatestRates {
