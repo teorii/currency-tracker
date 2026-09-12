@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-import type { LatestRates, RateHistory } from '../store/api/ratesApi';
+import type { Health, LatestRates, RateHistory } from '../store/api/ratesApi';
 
 const API = 'http://localhost:8000';
 
@@ -40,7 +40,15 @@ export const usdEurHistory: RateHistory = {
   count: 3,
 };
 
+export const health: Health = {
+  status: 'ok',
+  database: 'up',
+  tracked_pairs: 2,
+  latest_quote_at: '2026-09-04T01:37:04Z',
+};
+
 export const handlers = [
+  http.get(`${API}/health`, () => HttpResponse.json(health)),
   http.get(`${API}/rates/latest`, () => HttpResponse.json(latestRates)),
   http.get(`${API}/rates/history`, () => HttpResponse.json(usdEurHistory)),
 ];

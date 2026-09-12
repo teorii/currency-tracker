@@ -33,6 +33,6 @@ describe('App', () => {
 
     renderWithStore(<App />);
 
-    expect(await screen.findByText(/select a currency pair/i)).toBeInTheDocument();
+    expect(await screen.findByText(/select a pair/i)).toBeInTheDocument();
   });
 });

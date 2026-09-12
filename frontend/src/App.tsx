@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import Watchlist from './components/Watchlist';
+
+import HealthBadge from './components/HealthBadge';
 import RateChart from './components/RateChart';
+import Watchlist, { type Pair } from './components/Watchlist';
 import { useGetLatestRatesQuery } from './store/api/ratesApi';
 
-interface Pair {
-  base: string;
-  target: string;
-}
-
-function App() {
+export default function App() {
   const { data } = useGetLatestRatesQuery();
   const [chosenPair, setChosenPair] = useState<Pair | null>(null);
 
@@ -20,48 +17,29 @@ function App() {
     (firstRate ? { base: firstRate.base_currency, target: firstRate.target_currency } : null);
 
   return (
-    <div className="h-screen bg-[#0a0a0a] text-[#e5e5e5] flex flex-col overflow-hidden">
-      {/* Top Header Bar */}
-      <div className="bg-[#131722] border-b border-white/5 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <h1 className="text-xl font-bold">
-            currency <span className="text-gradient font-bold">exchange</span> tracker
-          </h1>
-          {selectedPair && (
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-[#e5e5e5] font-medium">
-                {selectedPair.base}/{selectedPair.target}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="flex h-screen flex-col overflow-hidden">
+      <header className="flex items-center justify-between border-b border-line bg-surface-raised px-5 py-2.5">
+        <h1 className="text-sm font-medium tracking-tight text-ink">
+          <span className="text-accent">fx</span>tracker
+        </h1>
+        <HealthBadge />
+      </header>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chart Area - Takes most of the space */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1">
+        <main className="min-w-0 flex-1">
           {selectedPair ? (
-            <div className="h-full overflow-auto">
-              <RateChart base={selectedPair.base} target={selectedPair.target} />
-            </div>
+            <RateChart base={selectedPair.base} target={selectedPair.target} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-[#a0a0a0]">
-              <svg className="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              <p className="text-sm font-light">select a currency pair to view its history</p>
+            <div className="flex h-full items-center justify-center">
+              <p className="text-xs text-ink-muted">Select a pair to see its history.</p>
             </div>
           )}
-        </div>
+        </main>
 
-        {/* Right Sidebar - Watchlist */}
-        <div className="w-80 bg-[#131722] border-l border-white/5 flex flex-col overflow-hidden">
+        <aside className="w-80 shrink-0 border-l border-line bg-surface-raised">
           <Watchlist selected={selectedPair} onSelect={setChosenPair} />
-        </div>
+        </aside>
       </div>
     </div>
   );
 }
-
-export default App;
