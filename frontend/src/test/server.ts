@@ -34,9 +34,10 @@ export const usdEurHistory: RateHistory = {
   end_date: '2026-09-04T23:59:59Z',
   history: [
     { date: '2026-09-02', timestamp: '2026-09-02T12:00:00Z', rate: 0.86 },
+    { date: '2026-09-03', timestamp: '2026-09-03T00:00:00Z', rate: 0.863 },
     { date: '2026-09-03', timestamp: '2026-09-03T12:00:00Z', rate: 0.861 },
   ],
-  count: 2,
+  count: 3,
 };
 
 export const handlers = [

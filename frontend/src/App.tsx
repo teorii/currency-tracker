@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Watchlist from './components/Watchlist';
-import PairHistory from './components/PairHistory';
+import RateChart from './components/RateChart';
 import { useGetLatestRatesQuery } from './store/api/ratesApi';
 
 interface Pair {
@@ -43,7 +43,7 @@ function App() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedPair ? (
             <div className="h-full overflow-auto">
-              <PairHistory base={selectedPair.base} target={selectedPair.target} />
+              <RateChart base={selectedPair.base} target={selectedPair.target} />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-[#a0a0a0]">
