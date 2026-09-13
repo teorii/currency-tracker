@@ -14,6 +14,18 @@ export function formatRate(rate: number): string {
   return rate.toFixed(places);
 }
 
+/** An amount of money: grouped thousands, and enough places to see a small result. */
+export function formatAmount(amount: number, currency?: string): string {
+  if (!Number.isFinite(amount)) return '';
+  const magnitude = Math.abs(amount);
+  const places = magnitude >= 1 || magnitude === 0 ? 2 : Math.min(8, 3 - Math.floor(Math.log10(magnitude)));
+  const text = amount.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: places,
+  });
+  return currency ? `${text} ${currency}` : text;
+}
+
 /** A fractional change as a signed percentage. The sign is always present. */
 export function formatChange(fraction: number): string {
   const percent = fraction * 100;

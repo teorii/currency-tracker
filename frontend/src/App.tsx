@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import Converter from './components/Converter';
 import HealthBadge from './components/HealthBadge';
 import RateChart from './components/RateChart';
 import Watchlist, { type Pair } from './components/Watchlist';
@@ -26,9 +27,18 @@ export default function App() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <main className="min-w-0 flex-1">
+        <main className="flex min-w-0 flex-1 flex-col">
           {selectedPair ? (
-            <RateChart base={selectedPair.base} target={selectedPair.target} />
+            <>
+              <div className="min-h-0 flex-1">
+                <RateChart base={selectedPair.base} target={selectedPair.target} />
+              </div>
+              <Converter
+                key={`${selectedPair.base}/${selectedPair.target}`}
+                from={selectedPair.base}
+                to={selectedPair.target}
+              />
+            </>
           ) : (
             <div className="flex h-full items-center justify-center">
               <p className="text-xs text-ink-muted">Select a pair to see its history.</p>

@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-import type { Health, LatestRates, RateHistory, TrackedPairs } from '../store/api/ratesApi';
+import type { Conversion, Health, LatestRates, RateHistory, TrackedPairs } from '../store/api/ratesApi';
 
 const API = 'http://localhost:8000';
 
@@ -86,6 +86,22 @@ export const trackedPairs: TrackedPairs = {
 };
 
 export const handlers = [
+  http.get(`${API}/rates/convert`, ({ request }) => {
+    const url = new URL(request.url);
+    const base = url.searchParams.get('base') ?? 'USD';
+    const target = url.searchParams.get('target') ?? 'EUR';
+    const amount = Number(url.searchParams.get('amount') ?? '1');
+    // A small fixed table stands in for the derivation logic, which the backend tests own.
+    const table: Record<string, Omit<Conversion, 'amount' | 'converted'>> = {
+      'USD/EUR': { base_currency: 'USD', target_currency: 'EUR', rate: 0.86, quoted_at: '2026-09-04T01:37:04Z', basis: 'direct', via: null },
+      'EUR/USD': { base_currency: 'EUR', target_currency: 'USD', rate: 1 / 0.86, quoted_at: '2026-09-04T01:37:04Z', basis: 'inverse', via: null },
+      'EUR/JPY': { base_currency: 'EUR', target_currency: 'JPY', rate: 181.43, quoted_at: '2026-09-04T01:37:04Z', basis: 'cross', via: 'USD' },
+      'USD/USD': { base_currency: 'USD', target_currency: 'USD', rate: 1, quoted_at: '2026-09-04T01:37:04Z', basis: 'identity', via: null },
+    };
+    const found = table[`${base}/${target}`];
+    if (!found) return HttpResponse.json({ detail: 'No rate held' }, { status: 404 });
+    return HttpResponse.json({ ...found, amount, converted: amount * found.rate });
+  }),
   http.get(`${API}/rates/pairs`, () => HttpResponse.json(trackedPairs)),
   http.patch(`${API}/rates/pairs/:base/:target`, async ({ params, request }) => {
     const { watched } = (await request.json()) as { watched: boolean };

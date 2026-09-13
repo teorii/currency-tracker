@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatChange, formatRate } from './format';
+import { formatAmount, formatChange, formatRate } from './format';
 
 describe('formatRate', () => {
   it('shows two places for large quotes like JPY', () => {
@@ -35,5 +35,19 @@ describe('formatChange', () => {
 
   it('leaves zero unsigned', () => {
     expect(formatChange(0)).toBe('0.00%');
+  });
+});
+
+describe('formatAmount', () => {
+  it('groups thousands and keeps two places', () => {
+    expect(formatAmount(18143.070223, 'JPY')).toBe('18,143.07 JPY');
+  });
+
+  it('keeps enough places to show a small result', () => {
+    expect(formatAmount(0.00123)).toBe('0.00123');
+  });
+
+  it('shows zero plainly', () => {
+    expect(formatAmount(0)).toBe('0.00');
   });
 });
