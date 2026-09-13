@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { formatClock, formatDateTime, formatRate } from '../lib/format';
-import { useGetHistoryQuery } from '../store/api/ratesApi';
+import { historyCsvUrl, useGetHistoryQuery } from '../store/api/ratesApi';
 import { palette } from '../theme';
 import { paddedDomain, summarise, toPoints, type Point } from '../lib/chart';
 import Delta from './Delta';
@@ -74,20 +74,33 @@ export default function RateChart({ base, target }: RateChartProps) {
           )}
         </div>
 
-        <div role="group" aria-label="Period" className="flex gap-1 rounded border border-line p-0.5">
-          {PERIODS.map(({ key }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setPeriodKey(key)}
-              aria-pressed={key === periodKey}
-              className={`rounded px-2.5 py-1 text-xs ${
-                key === periodKey ? 'bg-surface-overlay text-ink' : 'text-ink-muted hover:text-ink'
-              }`}
-            >
-              {key}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div role="group" aria-label="Period" className="flex gap-1 rounded border border-line p-0.5">
+            {PERIODS.map(({ key }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setPeriodKey(key)}
+                aria-pressed={key === periodKey}
+                className={`rounded px-2.5 py-1 text-xs ${
+                  key === periodKey ? 'bg-surface-overlay text-ink' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          <a
+            href={historyCsvUrl({ base, target, ...range })}
+            download
+            className={`rounded border border-line px-2.5 py-1 text-xs ${
+              summary ? 'text-ink-muted hover:text-ink' : 'pointer-events-none text-ink-dim'
+            }`}
+            aria-disabled={!summary}
+            title={summary ? 'Download this range as CSV' : 'Nothing in this range to download'}
+          >
+            CSV
+          </a>
         </div>
       </header>
 

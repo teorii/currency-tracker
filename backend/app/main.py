@@ -77,6 +77,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # So a script on the frontend can read the filename the CSV export sets.
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(health.router)

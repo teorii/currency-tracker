@@ -84,6 +84,35 @@ describe('RateChart', () => {
   });
 });
 
+describe('RateChart export', () => {
+  it('links to a csv of exactly the range on screen', async () => {
+    renderWithStore(<RateChart base="USD" target="EUR" />);
+    await screen.findByText('0.8610');
+
+    const link = screen.getByRole('link', { name: 'CSV' });
+    const url = new URL(link.getAttribute('href') ?? '');
+
+    expect(url.pathname).toBe('/rates/history.csv');
+    expect(url.searchParams.get('base')).toBe('USD');
+    expect(url.searchParams.get('target')).toBe('EUR');
+    const span = Date.parse(url.searchParams.get('end') ?? '') - Date.parse(url.searchParams.get('start') ?? '');
+    expect(span).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(link).toHaveAttribute('download');
+  });
+
+  it('is inert when there is nothing to download', async () => {
+    server.use(
+      http.get('http://localhost:8000/rates/history', () =>
+        HttpResponse.json({ ...usdEurHistory, history: [], count: 0 }),
+      ),
+    );
+    renderWithStore(<RateChart base="USD" target="EUR" />);
+    await screen.findByText(/no quotes for/i);
+
+    expect(screen.getByRole('link', { name: 'CSV' })).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
 describe('summarise', () => {
   it('reads first, last, high and low from the points', () => {
     const summary = summarise([
