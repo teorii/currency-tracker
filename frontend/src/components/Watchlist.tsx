@@ -2,10 +2,12 @@ import { useMemo, useState, type ReactNode } from 'react';
 
 import { formatRate } from '../lib/format';
 import {
-  useDeletePairMutation,
   useFetchRatesMutation,
   useGetLatestRatesQuery,
+  useGetPairsQuery,
+  useSetPairWatchedMutation,
   type RateSnapshot,
+  type TrackedPair,
 } from '../store/api/ratesApi';
 import Delta from './Delta';
 import Sparkline from './Sparkline';
@@ -22,45 +24,36 @@ interface WatchlistProps {
 
 const pairKey = (base: string, target: string) => `${base}/${target}`;
 
+const matches = (needle: string, base: string, target: string) =>
+  !needle || pairKey(base, target).includes(needle);
+
 export default function Watchlist({ selected, onSelect }: WatchlistProps) {
-  const { data, error, isLoading, isFetching, refetch } = useGetLatestRatesQuery();
-  const [fetchRates, { isLoading: isRefreshing }] = useFetchRatesMutation();
-  const [deletePair] = useDeletePairMutation();
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
-
-  const visible = useMemo(() => {
-    const rates = data?.rates ?? [];
-    const needle = query.trim().toUpperCase();
-    if (!needle) return rates;
-    return rates.filter((rate) =>
-      pairKey(rate.base_currency, rate.target_currency).includes(needle),
-    );
-  }, [data, query]);
-
-  const handleDelete = async (rate: RateSnapshot) => {
-    const key = pairKey(rate.base_currency, rate.target_currency);
-    if (!window.confirm(`Delete ${key} and every rate recorded for it?`)) return;
-    await deletePair({ base: rate.base_currency, target: rate.target_currency });
-  };
+  const needle = query.trim().toUpperCase();
 
   return (
     <section className="flex h-full flex-col" aria-label="Watchlist">
       <header className="border-b border-line px-3 py-2">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-medium uppercase tracking-wider text-ink-muted">
-            Watchlist
-            {data && <span className="ml-2 tabular text-ink-dim">{data.count}</span>}
+            {adding ? 'Add pairs' : 'Watchlist'}
           </h2>
-          <button
-            type="button"
-            onClick={() => fetchRates()}
-            disabled={isRefreshing}
-            className="rounded p-1 text-ink-muted hover:bg-surface-overlay hover:text-ink disabled:opacity-50"
-            title="Pull the latest quotes now"
-            aria-label="Refresh rates"
-          >
-            <RefreshIcon spinning={isRefreshing} />
-          </button>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => setAdding((open) => !open)}
+              aria-pressed={adding}
+              className={`rounded p-1 hover:bg-surface-overlay hover:text-ink ${
+                adding ? 'bg-surface-overlay text-accent' : 'text-ink-muted'
+              }`}
+              title={adding ? 'Back to the watchlist' : 'Add pairs to the watchlist'}
+              aria-label={adding ? 'Back to the watchlist' : 'Add pairs'}
+            >
+              <PlusIcon />
+            </button>
+            <RefreshButton />
+          </div>
         </div>
         <input
           type="search"
@@ -72,56 +65,87 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
         />
       </header>
 
-      <div
-        className={`flex-1 overflow-y-auto transition-opacity ${isFetching && !isLoading ? 'opacity-60' : ''}`}
-      >
-        {isLoading ? (
-          <Status>Loading rates</Status>
-        ) : error ? (
-          <Status>
-            <span className="text-down">Could not load rates.</span>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="ml-2 underline decoration-ink-dim hover:text-ink"
-            >
-              Retry
-            </button>
-          </Status>
-        ) : data?.count === 0 ? (
-          <Status>No pairs yet. Refresh to pull the first quotes.</Status>
-        ) : visible.length === 0 ? (
-          <Status>Nothing matches &ldquo;{query.trim()}&rdquo;</Status>
-        ) : (
-          <ul role="list" className="divide-y divide-line/60">
-            {visible.map((rate) => {
-              const isSelected =
-                selected?.base === rate.base_currency && selected?.target === rate.target_currency;
-              return (
-                <WatchlistRow
-                  key={pairKey(rate.base_currency, rate.target_currency)}
-                  rate={rate}
-                  isSelected={isSelected}
-                  onSelect={() => onSelect({ base: rate.base_currency, target: rate.target_currency })}
-                  onDelete={() => handleDelete(rate)}
-                />
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      {adding ? (
+        <AvailablePairs needle={needle} />
+      ) : (
+        <WatchedPairs needle={needle} selected={selected} onSelect={onSelect} />
+      )}
     </section>
   );
 }
 
-interface WatchlistRowProps {
+function WatchedPairs({
+  needle,
+  selected,
+  onSelect,
+}: {
+  needle: string;
+  selected: Pair | null;
+  onSelect: (pair: Pair) => void;
+}) {
+  const { data, error, isLoading, isFetching, refetch } = useGetLatestRatesQuery();
+  const [setWatched] = useSetPairWatchedMutation();
+
+  const visible = useMemo(
+    () => (data?.rates ?? []).filter((r) => matches(needle, r.base_currency, r.target_currency)),
+    [data, needle],
+  );
+
+  return (
+    <div
+      className={`flex-1 overflow-y-auto transition-opacity ${
+        isFetching && !isLoading ? 'opacity-60' : ''
+      }`}
+    >
+      {isLoading ? (
+        <Status>Loading rates</Status>
+      ) : error ? (
+        <Status>
+          <span className="text-down">Could not load rates.</span>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="ml-2 underline decoration-ink-dim hover:text-ink"
+          >
+            Retry
+          </button>
+        </Status>
+      ) : data?.count === 0 ? (
+        <Status>Nothing on the watchlist. Use + to add pairs.</Status>
+      ) : visible.length === 0 ? (
+        <Status>Nothing matches &ldquo;{needle}&rdquo;</Status>
+      ) : (
+        <ul role="list" className="divide-y divide-line/60">
+          {visible.map((rate) => (
+            <WatchedRow
+              key={pairKey(rate.base_currency, rate.target_currency)}
+              rate={rate}
+              isSelected={
+                selected?.base === rate.base_currency && selected?.target === rate.target_currency
+              }
+              onSelect={() => onSelect({ base: rate.base_currency, target: rate.target_currency })}
+              onRemove={() =>
+                setWatched({ base: rate.base_currency, target: rate.target_currency, watched: false })
+              }
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function WatchedRow({
+  rate,
+  isSelected,
+  onSelect,
+  onRemove,
+}: {
   rate: RateSnapshot;
   isSelected: boolean;
   onSelect: () => void;
-  onDelete: () => void;
-}
-
-function WatchlistRow({ rate, isSelected, onSelect, onDelete }: WatchlistRowProps) {
+  onRemove: () => void;
+}) {
   const key = pairKey(rate.base_currency, rate.target_currency);
   return (
     <li
@@ -144,14 +168,100 @@ function WatchlistRow({ rate, isSelected, onSelect, onDelete }: WatchlistRowProp
       </button>
       <button
         type="button"
-        onClick={onDelete}
-        aria-label={`Delete ${key}`}
-        title={`Delete ${key}`}
-        className="absolute right-1 top-1 rounded p-1 text-ink-dim opacity-0 hover:bg-down/20 hover:text-down focus:opacity-100 group-hover:opacity-100"
+        onClick={onRemove}
+        aria-label={`Remove ${key} from the watchlist`}
+        title="Remove from the watchlist. Its history is kept."
+        className="absolute right-1 top-1 rounded p-1 text-ink-dim opacity-0 hover:bg-surface-overlay hover:text-ink focus:opacity-100 group-hover:opacity-100"
       >
-        <TrashIcon />
+        <MinusIcon />
       </button>
     </li>
+  );
+}
+
+function AvailablePairs({ needle }: { needle: string }) {
+  const { data, error, isLoading } = useGetPairsQuery();
+  const [setWatched, { isLoading: isSaving }] = useSetPairWatchedMutation();
+
+  const available = useMemo(
+    () =>
+      (data?.pairs ?? []).filter(
+        (p) => !p.watched && matches(needle, p.base_currency, p.target_currency),
+      ),
+    [data, needle],
+  );
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {isLoading ? (
+        <Status>Loading pairs</Status>
+      ) : error ? (
+        <Status>
+          <span className="text-down">Could not load the available pairs.</span>
+        </Status>
+      ) : available.length === 0 ? (
+        <Status>
+          {needle ? <>Nothing matches &ldquo;{needle}&rdquo;</> : 'Every pair is already watched.'}
+        </Status>
+      ) : (
+        <ul role="list" className="divide-y divide-line/60">
+          {available.map((pair) => (
+            <AvailableRow
+              key={pairKey(pair.base_currency, pair.target_currency)}
+              pair={pair}
+              disabled={isSaving}
+              onAdd={() =>
+                setWatched({ base: pair.base_currency, target: pair.target_currency, watched: true })
+              }
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AvailableRow({
+  pair,
+  disabled,
+  onAdd,
+}: {
+  pair: TrackedPair;
+  disabled: boolean;
+  onAdd: () => void;
+}) {
+  const key = pairKey(pair.base_currency, pair.target_currency);
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={disabled}
+        aria-label={`Add ${key} to the watchlist`}
+        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-surface-raised disabled:opacity-50"
+      >
+        <span className="text-sm text-ink">{key}</span>
+        <span className="tabular text-2xs text-ink-dim">
+          {pair.observations} {pair.observations === 1 ? 'quote' : 'quotes'}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function RefreshButton() {
+  const [fetchRates, { isLoading }] = useFetchRatesMutation();
+  return (
+    <button
+      type="button"
+      onClick={() => fetchRates()}
+      disabled={isLoading}
+      className="rounded p-1 text-ink-muted hover:bg-surface-overlay hover:text-ink disabled:opacity-50"
+      title="Pull the latest quotes now"
+      aria-label="Refresh rates"
+    >
+      <RefreshIcon spinning={isLoading} />
+    </button>
   );
 }
 
@@ -159,37 +269,37 @@ function Status({ children }: { children: ReactNode }) {
   return <p className="px-3 py-6 text-center text-xs text-ink-muted">{children}</p>;
 }
 
+const iconProps = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const;
+
 function RefreshIcon({ spinning }: { spinning: boolean }) {
   return (
-    <svg
-      className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} {...iconProps}>
       <path d="M21 12a9 9 0 1 1-3-6.7" />
       <path d="M21 3v6h-6" />
     </svg>
   );
 }
 
-function TrashIcon() {
+function PlusIcon() {
   return (
-    <svg
-      className="h-3.5 w-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+    <svg className="h-4 w-4" {...iconProps}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" {...iconProps}>
+      <path d="M5 12h14" />
     </svg>
   );
 }

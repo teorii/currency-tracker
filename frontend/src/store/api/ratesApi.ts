@@ -39,6 +39,7 @@ export interface RateHistory {
 export interface TrackedPair {
   base_currency: string;
   target_currency: string;
+  watched: boolean;
   first_seen: Timestamp;
   observations: number;
   latest_quote_at: Timestamp | null;
@@ -99,6 +100,10 @@ export interface PairRef {
   target: string;
 }
 
+export interface WatchRequest extends PairRef {
+  watched: boolean;
+}
+
 /** A URL for the CSV export, for use as an href rather than a fetch. */
 export const historyCsvUrl = ({ base, target, start, end }: HistoryRange): string =>
   `${API_BASE_URL}/rates/history.csv?${new URLSearchParams({ base, target, start, end })}`;
@@ -137,6 +142,14 @@ const ratesApi = createApi({
       query: () => ({ url: '/rates/fetch-now', method: 'POST' }),
       invalidatesTags: ['Rates', 'Pairs'],
     }),
+    setPairWatched: builder.mutation<TrackedPair, WatchRequest>({
+      query: ({ base, target, watched }) => ({
+        url: `/rates/pairs/${base}/${target}`,
+        method: 'PATCH',
+        body: { watched },
+      }),
+      invalidatesTags: ['Rates', 'Pairs'],
+    }),
     deletePair: builder.mutation<Deleted, PairRef>({
       query: ({ base, target }) => ({
         url: `/rates/pairs/${base}/${target}`,
@@ -154,6 +167,7 @@ export const {
   useGetHistoryQuery,
   useConvertQuery,
   useFetchRatesMutation,
+  useSetPairWatchedMutation,
   useDeletePairMutation,
 } = ratesApi;
 

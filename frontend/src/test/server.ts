@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-import type { Health, LatestRates, RateHistory } from '../store/api/ratesApi';
+import type { Health, LatestRates, RateHistory, TrackedPairs } from '../store/api/ratesApi';
 
 const API = 'http://localhost:8000';
 
@@ -47,7 +47,51 @@ export const health: Health = {
   latest_quote_at: '2026-09-04T01:37:04Z',
 };
 
+export const trackedPairs: TrackedPairs = {
+  pairs: [
+    {
+      base_currency: 'USD',
+      target_currency: 'CHF',
+      watched: false,
+      first_seen: '2026-09-04T01:37:04Z',
+      observations: 2,
+      latest_quote_at: '2026-09-04T01:37:04Z',
+    },
+    {
+      base_currency: 'USD',
+      target_currency: 'EUR',
+      watched: true,
+      first_seen: '2026-09-04T01:37:04Z',
+      observations: 2,
+      latest_quote_at: '2026-09-04T01:37:04Z',
+    },
+    {
+      base_currency: 'USD',
+      target_currency: 'JPY',
+      watched: true,
+      first_seen: '2026-09-04T01:37:04Z',
+      observations: 2,
+      latest_quote_at: '2026-09-04T01:37:04Z',
+    },
+    {
+      base_currency: 'USD',
+      target_currency: 'ZAR',
+      watched: false,
+      first_seen: '2026-09-04T01:37:04Z',
+      observations: 2,
+      latest_quote_at: '2026-09-04T01:37:04Z',
+    },
+  ],
+  count: 4,
+};
+
 export const handlers = [
+  http.get(`${API}/rates/pairs`, () => HttpResponse.json(trackedPairs)),
+  http.patch(`${API}/rates/pairs/:base/:target`, async ({ params, request }) => {
+    const { watched } = (await request.json()) as { watched: boolean };
+    const pair = trackedPairs.pairs.find((p) => p.target_currency === params.target);
+    return HttpResponse.json({ ...pair, watched });
+  }),
   http.get(`${API}/health`, () => HttpResponse.json(health)),
   http.get(`${API}/rates/latest`, () => HttpResponse.json(latestRates)),
   http.get(`${API}/rates/history`, () => HttpResponse.json(usdEurHistory)),

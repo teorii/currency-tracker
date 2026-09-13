@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithStore } from '../test/renderWithStore';
-import { server } from '../test/server';
+import { server, trackedPairs } from '../test/server';
 import Watchlist from './Watchlist';
 
 const noop = () => {};
@@ -78,18 +78,6 @@ describe('Watchlist', () => {
     expect(await screen.findByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
 
-  it('explains the empty state when nothing is tracked', async () => {
-    server.use(
-      http.get('http://localhost:8000/rates/latest', () =>
-        HttpResponse.json({ rates: [], count: 0 }),
-      ),
-    );
-
-    renderWithStore(<Watchlist selected={null} onSelect={noop} />);
-
-    await waitFor(() => expect(screen.getByText(/no pairs yet/i)).toBeInTheDocument());
-  });
-
   it('shows a placeholder instead of a change when there is no earlier quote', async () => {
     server.use(
       http.get('http://localhost:8000/rates/latest', () =>
@@ -113,5 +101,73 @@ describe('Watchlist', () => {
 
     const row = await screen.findByRole('button', { name: /^USD\/CHF/ });
     expect(within(row).getByText('--')).toBeInTheDocument();
+  });
+
+  it('removes a pair from the watchlist without a confirmation', async () => {
+    const patched: string[] = [];
+    server.use(
+      http.patch('http://localhost:8000/rates/pairs/:base/:target', async ({ params, request }) => {
+        const body = (await request.json()) as { watched: boolean };
+        patched.push(`${params.base}/${params.target}:${body.watched}`);
+        return HttpResponse.json({ ...trackedPairs.pairs[1], watched: body.watched });
+      }),
+    );
+    renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+    await screen.findByRole('button', { name: /^USD\/EUR/ });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove USD/EUR from the watchlist' }));
+
+    await waitFor(() => expect(patched).toEqual(['USD/EUR:false']));
+  });
+
+  it('lists only the unwatched pairs when adding', async () => {
+    renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+    await screen.findByRole('button', { name: /^USD\/EUR/ });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add pairs' }));
+
+    expect(await screen.findByRole('button', { name: 'Add USD/CHF to the watchlist' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add USD/ZAR to the watchlist' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add USD\/EUR/ })).not.toBeInTheDocument();
+  });
+
+  it('watches a pair chosen from the add list', async () => {
+    const patched: string[] = [];
+    server.use(
+      http.patch('http://localhost:8000/rates/pairs/:base/:target', async ({ params, request }) => {
+        const body = (await request.json()) as { watched: boolean };
+        patched.push(`${params.base}/${params.target}:${body.watched}`);
+        return HttpResponse.json({ ...trackedPairs.pairs[0], watched: body.watched });
+      }),
+    );
+    renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Add pairs' }));
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add USD/CHF to the watchlist' }));
+
+    await waitFor(() => expect(patched).toEqual(['USD/CHF:true']));
+  });
+
+  it('applies the filter to the add list as well', async () => {
+    renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Add pairs' }));
+    await screen.findByRole('button', { name: 'Add USD/CHF to the watchlist' });
+
+    await userEvent.type(screen.getByRole('searchbox', { name: /filter pairs/i }), 'zar');
+
+    expect(screen.queryByRole('button', { name: /Add USD\/CHF/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add USD\/ZAR/ })).toBeInTheDocument();
+  });
+
+  it('explains an empty watchlist', async () => {
+    server.use(
+      http.get('http://localhost:8000/rates/latest', () =>
+        HttpResponse.json({ rates: [], count: 0 }),
+      ),
+    );
+
+    renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+
+    await waitFor(() => expect(screen.getByText(/nothing on the watchlist/i)).toBeInTheDocument());
   });
 });
