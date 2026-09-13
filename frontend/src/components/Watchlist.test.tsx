@@ -170,4 +170,84 @@ describe('Watchlist', () => {
 
     await waitFor(() => expect(screen.getByText(/nothing on the watchlist/i)).toBeInTheDocument());
   });
+
+  describe('keyboard', () => {
+    it('walks the rows with the arrow keys', async () => {
+      renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+      const eur = await screen.findByRole('button', { name: /^USD\/EUR/ });
+      const jpy = screen.getByRole('button', { name: /^USD\/JPY/ });
+
+      eur.focus();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(jpy).toHaveFocus();
+
+      await userEvent.keyboard('{ArrowUp}');
+      expect(eur).toHaveFocus();
+    });
+
+    it('stops at the ends and jumps with Home and End', async () => {
+      renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+      const eur = await screen.findByRole('button', { name: /^USD\/EUR/ });
+      const jpy = screen.getByRole('button', { name: /^USD\/JPY/ });
+
+      eur.focus();
+      await userEvent.keyboard('{ArrowUp}');
+      expect(eur).toHaveFocus();
+
+      await userEvent.keyboard('{End}');
+      expect(jpy).toHaveFocus();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(jpy).toHaveFocus();
+
+      await userEvent.keyboard('{Home}');
+      expect(eur).toHaveFocus();
+    });
+
+    it('selects a focused row with Enter', async () => {
+      const onSelect = vi.fn();
+      renderWithStore(<Watchlist selected={null} onSelect={onSelect} />);
+      const jpy = await screen.findByRole('button', { name: /^USD\/JPY/ });
+
+      jpy.focus();
+      await userEvent.keyboard('{Enter}');
+
+      expect(onSelect).toHaveBeenCalledWith({ base: 'USD', target: 'JPY' });
+    });
+
+    it('jumps to the filter on slash from anywhere', async () => {
+      renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+      const eur = await screen.findByRole('button', { name: /^USD\/EUR/ });
+      const filter = screen.getByRole('searchbox', { name: /filter pairs/i });
+
+      eur.focus();
+      await userEvent.keyboard('/');
+
+      expect(filter).toHaveFocus();
+      expect(filter).toHaveValue('');
+    });
+
+    it('lets a slash be typed once the filter has focus', async () => {
+      renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+      await screen.findByRole('button', { name: /^USD\/EUR/ });
+      const filter = screen.getByRole('searchbox', { name: /filter pairs/i });
+
+      await userEvent.type(filter, 'usd/');
+
+      expect(filter).toHaveValue('usd/');
+    });
+
+    it('moves from the filter into the list with ArrowDown and clears it with Escape', async () => {
+      renderWithStore(<Watchlist selected={null} onSelect={noop} />);
+      const eur = await screen.findByRole('button', { name: /^USD\/EUR/ });
+      const filter = screen.getByRole('searchbox', { name: /filter pairs/i });
+
+      await userEvent.type(filter, 'e');
+      await userEvent.keyboard('{ArrowDown}');
+      expect(eur).toHaveFocus();
+
+      filter.focus();
+      await userEvent.keyboard('{Escape}');
+      expect(filter).toHaveValue('');
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { formatRate } from '../lib/format';
 import {
@@ -31,6 +31,21 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const needle = query.trim().toUpperCase();
+  const filterRef = useRef<HTMLInputElement>(null);
+
+  // "/" jumps to the filter from anywhere on the page, unless the keystroke
+  // belongs to a field the user is already typing in.
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isTypingTarget(event.target)) return;
+      event.preventDefault();
+      filterRef.current?.focus();
+      filterRef.current?.select();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <section className="flex h-full flex-col" aria-label="Watchlist">
@@ -56,10 +71,18 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
           </div>
         </div>
         <input
+          ref={filterRef}
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter pairs"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setQuery('');
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              firstRowIn(event.currentTarget.closest('section'))?.focus();
+            }
+          }}
+          placeholder="Filter pairs, or press /"
           aria-label="Filter pairs"
           className="mt-2 w-full rounded border border-line bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink-dim focus:border-accent"
         />
@@ -115,7 +138,7 @@ function WatchedPairs({
       ) : visible.length === 0 ? (
         <Status>Nothing matches &ldquo;{needle}&rdquo;</Status>
       ) : (
-        <ul role="list" className="divide-y divide-line/60">
+        <ul role="list" className="divide-y divide-line/60" onKeyDown={walkRows}>
           {visible.map((rate) => (
             <WatchedRow
               key={pairKey(rate.base_currency, rate.target_currency)}
@@ -204,7 +227,7 @@ function AvailablePairs({ needle }: { needle: string }) {
           {needle ? <>Nothing matches &ldquo;{needle}&rdquo;</> : 'Every pair is already watched.'}
         </Status>
       ) : (
-        <ul role="list" className="divide-y divide-line/60">
+        <ul role="list" className="divide-y divide-line/60" onKeyDown={walkRows}>
           {available.map((pair) => (
             <AvailableRow
               key={pairKey(pair.base_currency, pair.target_currency)}
@@ -247,6 +270,38 @@ function AvailableRow({
       </button>
     </li>
   );
+}
+
+const ROW = 'li > button:first-of-type';
+
+function firstRowIn(root: Element | null): HTMLElement | null {
+  return root?.querySelector<HTMLElement>(ROW) ?? null;
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+  );
+}
+
+/** Up and down move between rows; Home and End jump to the ends. Focus does the scrolling. */
+function walkRows(event: KeyboardEvent<HTMLUListElement>) {
+  const moves: Record<string, (index: number, last: number) => number> = {
+    ArrowDown: (index, last) => Math.min(index + 1, last),
+    ArrowUp: (index) => Math.max(index - 1, 0),
+    Home: () => 0,
+    End: (_, last) => last,
+  };
+  const move = moves[event.key];
+  if (!move) return;
+
+  const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(ROW));
+  const index = rows.findIndex((row) => row === document.activeElement);
+  if (index === -1) return;
+
+  event.preventDefault();
+  rows[move(index, rows.length - 1)]?.focus();
 }
 
 function RefreshButton() {
