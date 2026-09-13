@@ -57,6 +57,7 @@ class FetchResult(BaseModel):
 class TrackedPair(BaseModel):
     base_currency: CurrencyCode
     target_currency: CurrencyCode
+    watched: bool
     first_seen: datetime
     observations: int
     latest_quote_at: datetime | None = None
@@ -65,6 +66,10 @@ class TrackedPair(BaseModel):
 class TrackedPairs(BaseModel):
     pairs: list[TrackedPair]
     count: int
+
+
+class WatchRequest(BaseModel):
+    watched: bool
 
 
 class Health(BaseModel):

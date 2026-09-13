@@ -157,3 +157,23 @@ def test_a_response_with_nothing_usable_is_a_502(client: TestClient) -> None:
     )
 
     assert client.post("/rates/fetch-now").status_code == 502
+
+
+@respx.mock
+def test_a_fresh_fetch_watches_the_majors_and_nothing_else(client: TestClient, db: Session) -> None:
+    respx.get(**LIVE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "source": "USD",
+                "timestamp": 1772452800,
+                "quotes": {"USDEUR": 0.92, "USDJPY": 149.5, "USDXYZ": 5.0},
+            },
+        )
+    )
+
+    client.post("/rates/fetch-now")
+
+    watched = {p.target_currency: p.watched for p in db.query(CurrencyPair).all()}
+    assert watched == {"EUR": True, "JPY": True, "XYZ": False}

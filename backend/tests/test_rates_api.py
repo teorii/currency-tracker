@@ -9,7 +9,7 @@ from app.models import CurrencyPair, ExchangeRate
 
 @pytest.fixture
 def usd_eur(db: Session) -> CurrencyPair:
-    pair = CurrencyPair(base_currency="USD", target_currency="EUR")
+    pair = CurrencyPair(base_currency="USD", target_currency="EUR", watched=True)
     db.add(pair)
     db.commit()
     db.refresh(pair)
@@ -161,7 +161,7 @@ def test_latest_does_not_scale_queries_with_pair_count(
     client: TestClient, db: Session, statements
 ) -> None:
     for target in ("EUR", "GBP", "JPY", "CHF", "CAD"):
-        pair = CurrencyPair(base_currency="USD", target_currency=target)
+        pair = CurrencyPair(base_currency="USD", target_currency=target, watched=True)
         db.add(pair)
         db.commit()
         db.refresh(pair)
@@ -225,3 +225,60 @@ def test_the_window_follows_the_newest_quote_not_the_clock(
     snapshot = client.get("/rates/latest").json()["rates"][0]
 
     assert snapshot["change_24h"] == pytest.approx(0.1)
+
+
+def test_latest_shows_only_watched_pairs(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    hidden = CurrencyPair(base_currency="USD", target_currency="XYZ", watched=False)
+    db.add(hidden)
+    db.commit()
+    db.refresh(hidden)
+    add_rate(db, usd_eur, 0.92, stamp(2026, 3, 2, 12))
+    add_rate(db, hidden, 5.0, stamp(2026, 3, 2, 12))
+
+    body = client.get("/rates/latest").json()
+
+    assert [r["target_currency"] for r in body["rates"]] == ["EUR"]
+
+
+def test_a_pair_can_be_taken_off_the_watchlist_and_put_back(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.92, stamp(2026, 3, 2, 12))
+
+    off = client.patch("/rates/pairs/USD/EUR", json={"watched": False})
+    assert off.status_code == 200
+    assert off.json()["watched"] is False
+    assert client.get("/rates/latest").json()["count"] == 0
+
+    on = client.patch("/rates/pairs/usd/eur", json={"watched": True})
+    assert on.json()["watched"] is True
+    assert client.get("/rates/latest").json()["count"] == 1
+
+
+def test_unwatching_keeps_the_history(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    add_rate(db, usd_eur, 0.92, stamp(2026, 3, 2, 12))
+
+    client.patch("/rates/pairs/USD/EUR", json={"watched": False})
+
+    assert db.query(ExchangeRate).count() == 1
+
+
+def test_watching_an_unknown_pair_is_a_404(client: TestClient) -> None:
+    assert client.patch("/rates/pairs/USD/QQQ", json={"watched": True}).status_code == 404
+
+
+def test_pairs_reports_the_watched_flag(
+    client: TestClient, db: Session, usd_eur: CurrencyPair
+) -> None:
+    db.add(CurrencyPair(base_currency="USD", target_currency="XYZ", watched=False))
+    db.commit()
+
+    by_target = {
+        p["target_currency"]: p["watched"] for p in client.get("/rates/pairs").json()["pairs"]
+    }
+
+    assert by_target == {"EUR": True, "XYZ": False}

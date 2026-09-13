@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -57,6 +58,10 @@ class CurrencyPair(Base):
     id = Column(Integer, primary_key=True)
     base_currency = Column(String(3), nullable=False)
     target_currency = Column(String(3), nullable=False)
+    # Whether the pair appears on the watchlist. The provider quotes far more
+    # currencies than anyone wants to look at, and every one of them is
+    # stored; this is the user's choice of which to show.
+    watched = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(UTCDateTime, nullable=False, default=utcnow)
     updated_at = Column(UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow)
 

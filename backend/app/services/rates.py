@@ -6,6 +6,7 @@ from sqlalchemy import Subquery, func, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
+from ..currencies import DEFAULT_WATCHLIST
 from ..models import CurrencyPair, ExchangeRate
 from .provider import LiveQuotes, fetch_live_quotes
 
@@ -75,7 +76,14 @@ def store_quotes(db: Session, quotes: LiveQuotes) -> RefreshResult:
         _insert_ignoring_duplicates(
             db,
             CurrencyPair,
-            [{"base_currency": quotes.base, "target_currency": target} for target in unknown],
+            [
+                {
+                    "base_currency": quotes.base,
+                    "target_currency": target,
+                    "watched": target in DEFAULT_WATCHLIST,
+                }
+                for target in unknown
+            ],
         )
         pair_ids = _pair_ids_by_target(db, quotes.base)
 

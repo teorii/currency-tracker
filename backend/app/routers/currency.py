@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from ..schemas import (
     RateSnapshot,
     TrackedPair,
     TrackedPairs,
+    WatchRequest,
 )
 from ..services.conversion import derive_rate
 from ..services.provider import ExchangeRateError
@@ -51,7 +52,7 @@ SPARKLINE_WINDOW = timedelta(hours=24)
 
 @router.get("/latest", response_model=LatestRates)
 async def get_latest_rates(db: Session = Depends(get_db)):
-    """The most recent quote for every tracked pair, with its recent movement."""
+    """The most recent quote for every watched pair, with its recent movement."""
     # Two statements however many pairs there are. Reading the pairs and then
     # querying each one's newest rate meant a query per pair.
     ranked = latest_rate_rows()
@@ -64,7 +65,7 @@ async def get_latest_rates(db: Session = Depends(get_db)):
             ranked.c.timestamp,
         )
         .join(ranked, ranked.c.currency_pair_id == CurrencyPair.id)
-        .where(ranked.c.recency == 1)
+        .where(ranked.c.recency == 1, CurrencyPair.watched.is_(True))
         .order_by(CurrencyPair.base_currency, CurrencyPair.target_currency)
     ).all()
 
@@ -105,12 +106,18 @@ async def list_pairs(db: Session = Depends(get_db)):
         select(
             CurrencyPair.base_currency,
             CurrencyPair.target_currency,
+            CurrencyPair.watched,
             CurrencyPair.created_at,
             func.count(ExchangeRate.id),
             func.max(ExchangeRate.timestamp),
         )
         .outerjoin(ExchangeRate, ExchangeRate.currency_pair_id == CurrencyPair.id)
-        .group_by(CurrencyPair.id, CurrencyPair.base_currency, CurrencyPair.target_currency)
+        .group_by(
+            CurrencyPair.id,
+            CurrencyPair.base_currency,
+            CurrencyPair.target_currency,
+            CurrencyPair.watched,
+        )
         .order_by(CurrencyPair.base_currency, CurrencyPair.target_currency)
     ).all()
 
@@ -118,11 +125,12 @@ async def list_pairs(db: Session = Depends(get_db)):
         TrackedPair(
             base_currency=base,
             target_currency=target,
+            watched=watched,
             first_seen=first_seen,
             observations=observations,
             latest_quote_at=latest,
         )
-        for base, target, first_seen, observations, latest in rows
+        for base, target, watched, first_seen, observations, latest in rows
     ]
     return TrackedPairs(pairs=pairs, count=len(pairs))
 
@@ -285,6 +293,34 @@ async def export_rate_history(
         content=buffer.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.patch("/pairs/{base}/{target}", response_model=TrackedPair)
+async def set_pair_watched(
+    base: str,
+    target: str,
+    body: WatchRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Put a pair on the watchlist or take it off. Its history is untouched either way."""
+    pair = _require_pair(db, base, target)
+    pair.watched = body.watched
+    db.commit()
+    db.refresh(pair)
+
+    observations, latest = db.execute(
+        select(func.count(ExchangeRate.id), func.max(ExchangeRate.timestamp)).where(
+            ExchangeRate.currency_pair_id == pair.id
+        )
+    ).one()
+    return TrackedPair(
+        base_currency=pair.base_currency,
+        target_currency=pair.target_currency,
+        watched=pair.watched,
+        first_seen=pair.created_at,
+        observations=observations,
+        latest_quote_at=latest,
     )
 
 
