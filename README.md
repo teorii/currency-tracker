@@ -1,375 +1,136 @@
-# 💱 Currency Exchange Rate Tracker
+# Currency Tracker
 
-A full-stack application for tracking currency exchange rates with real-time data fetching, historical analysis, and an intuitive trading-style interface.
+A small foreign exchange terminal. It pulls quotes for about 170 currencies
+once an hour, keeps every one of them, and shows the ones you care about as a
+watchlist with a chart, a converter, and a CSV export.
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.0+-61dafb.svg)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-3178c6.svg)](https://www.typescriptlang.org/)
+FastAPI and SQLite behind, React and TypeScript in front. No database server
+to run.
 
-## Features
+![The watchlist, chart and converter](screenshots/app.png)
 
-- **Real-time Exchange Rates**: Fetches live exchange rates from external APIs
-- **Historical Data**: View exchange rate history with configurable time periods (7d, 30d, 90d)
-- **Interactive Charts**: Beautiful line charts with TradingView-style interface
-- **Currency Pair Management**: Add, remove, and hide currency pairs
-- **Automated Data Fetching**: Scheduled hourly updates via background jobs
-- **RESTful API**: Well-documented API endpoints for all operations
+## What it does
 
-## Tech Stack
+- Watches a curated set of pairs out of everything the provider quotes. The
+  rest are stored anyway, so a pair added later already has history.
+- Charts any range from a day to three months at full resolution, one point
+  per quote, with the change over the range and the high and low.
+- Prices any two currencies against each other, including pairs the provider
+  never quotes, and says how the number was arrived at: quoted, inverted, or
+  crossed through a third currency.
+- Exports the range on screen as CSV.
+- Reports its own health, and refreshes on the hour without being asked.
 
-### Backend
-- **FastAPI**: Modern Python web framework
-- **SQLite**: Embedded database, no server to run
-- **SQLAlchemy**: ORM for database operations
-- **APScheduler**: Background job scheduling
-- **httpx**: Async HTTP client for API calls
+The whole thing is usable from the keyboard: arrows walk the watchlist,
+`/` jumps to the filter, Enter selects.
 
-### Frontend
-- **React 18**: UI library
-- **TypeScript**: Type-safe JavaScript
-- **Redux Toolkit**: State management
-- **Tailwind CSS**: Utility-first styling
-- **Recharts**: Chart visualization library
-- **Vite**: Fast build tool
+## Running it
 
-## Prerequisites
+You need Python 3.11 or newer, Node 22 or newer, and a free access key from
+[exchangerate.host](https://exchangerate.host). That key is the only
+configuration with no default.
 
-You'll need a few things installed before getting started:
-
-- **Python 3.8+** ([Download](https://www.python.org/downloads/))
-- **Node.js 16+** and npm ([Download](https://nodejs.org/))
-
-## Getting Started
-
-### Clone the Repository
-
-```bash
-git clone https://github.com/YOUR_USERNAME/currency-tracker.git
-cd currency-tracker
-```
-
-### Backend Setup
-
-First, let's get the backend up and running.
-
-#### Create Virtual Environment
+Backend:
 
 ```bash
 cd backend
-python -m venv venv
-```
-
-Then activate it:
-- **Windows**: `venv\Scripts\activate`
-- **macOS/Linux**: `source venv/bin/activate`
-
-#### Install Dependencies
-
-```bash
+python -m venv venv && venv/Scripts/activate     # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
-```
-
-#### Database
-
-There is nothing to set up. The application uses SQLite and creates
-`backend/currency_tracker.db` on first run. Apply the schema with:
-
-```bash
+cp .env.example .env                              # then fill in EXCHANGE_RATE_API_KEY
 alembic upgrade head
+uvicorn app.main:app --reload
 ```
 
-#### Configure Environment Variables
-
-Copy the example environment file and fill in your values:
-
-```bash
-cp .env.example .env
-```
-
-Now edit `.env` and add your actual values:
-
-```env
-# Exchange Rate API Configuration
-EXCHANGE_RATE_API_BASE=http://api.exchangerate.host
-EXCHANGE_RATE_API_KEY=your_api_key_here
-
-# CORS Configuration
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173
-
-# Server Configuration
-PORT=8000
-HOST=0.0.0.0
-LOG_LEVEL=INFO
-```
-
-Make sure to:
-- Replace `your_api_key_here` with your exchange rate API key (get one from [exchangerate.host](https://exchangerate.host))
-- Never commit the `.env` file to version control
-
-Only `EXCHANGE_RATE_API_KEY` is required. `DATABASE_URL` is optional and
-defaults to a SQLite file beside the application.
-
-#### Start the Backend Server
-
-```bash
-python -m app.main
-```
-
-Or if you prefer using uvicorn directly:
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Once it's running, you can access:
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs (Swagger UI)
-- **Alternative Docs**: http://localhost:8000/redoc
-
-### Frontend Setup
-
-Now let's get the frontend running.
-
-#### Install Dependencies
+Frontend, in a second terminal:
 
 ```bash
 cd frontend
-npm install
-```
-
-#### Start the Development Server
-
-```bash
+npm ci
 npm run dev
 ```
 
-The frontend will be available at http://localhost:5173. It's already configured to connect to the backend at `http://localhost:8000`, so if your backend is running on a different port, you'll need to update the API URL in `frontend/src/store/api/ratesApi.ts`.
+Open http://localhost:5173. The watchlist starts empty until the first
+refresh; press the refresh button or wait for the top of the hour. Interactive
+API docs are at http://localhost:8000/docs.
 
-## Project Structure
+Every other setting in `backend/.env.example` has a working default. Set
+`DATABASE_URL` to put the SQLite file somewhere other than `backend/`, and
+`VITE_API_URL` in `frontend/.env` if the API is not on localhost:8000.
 
-```
-currency-tracker/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI application entry point
-│   │   ├── database.py           # Database configuration
-│   │   ├── models.py             # SQLAlchemy models
-│   │   ├── routers/
-│   │   │   └── currency.py       # API endpoints
-│   │   └── services/
-│   │       └── exchange_rate_service.py  # Business logic
-│   ├── alembic/
-│   │   └── versions/               # Alembic revisions
-│   ├── requirements.txt          # Python dependencies
-│   └── .env.example              # Environment variables template
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── PairList.tsx      # Currency pairs watchlist
-│   │   │   └── PairHistory.tsx    # Historical chart component
-│   │   ├── store/
-│   │   │   ├── api/
-│   │   │   │   └── ratesApi.ts    # Redux API slice
-│   │   │   ├── hooks.ts           # Redux hooks
-│   │   │   └── store.ts           # Redux store configuration
-│   │   ├── App.tsx                # Main application component
-│   │   └── main.tsx               # Application entry point
-│   ├── package.json               # Node.js dependencies
-│   └── vite.config.ts             # Vite configuration
-│
-└── README.md                      # This file
-```
+## API
 
-## API Endpoints
+| Method | Path | |
+|---|---|---|
+| `GET` | `/health` | Database reachability, pair count, newest quote. 503 when the database is down. |
+| `GET` | `/rates/latest` | Newest rate for every watched pair, with the trailing-day change and sparkline points. |
+| `GET` | `/rates/history` | Every quote for one pair between two timestamps. |
+| `GET` | `/rates/history.csv` | The same range as a download. |
+| `GET` | `/rates/convert` | Price `base` against `target`, deriving the rate when it is not quoted directly. |
+| `GET` | `/rates/pairs` | Every pair held, watched or not, with its history depth. |
+| `PATCH` | `/rates/pairs/{base}/{target}` | Put a pair on the watchlist or take it off. History is kept either way. |
+| `DELETE` | `/rates/pairs/{base}/{target}` | Drop a pair and its history. The hourly refresh will recreate the pair. |
+| `POST` | `/rates/fetch-now` | Pull quotes now rather than waiting for the hour. |
 
-Here are the main API endpoints you can use:
+Currency codes are validated at the edge and may be given in either case.
+Timestamps are ISO 8601 and always UTC.
 
-- `GET /rates/latest` - Get latest exchange rates for all tracked pairs
-- `GET /rates/history?base={base}&target={target}&start={start}&end={end}` - Get historical rates
-- `POST /rates/fetch-now` - Manually trigger exchange rate fetch
-- `GET /rates/pairs` - Get all tracked currency pairs
-- `DELETE /rates/pairs/{base}/{target}` - Remove a currency pair
+## How it is built
 
-### Example Requests
+**Backend.** FastAPI with pydantic response models, SQLAlchemy, Alembic for
+the schema, APScheduler for the hourly job, and httpx to talk to the
+provider. The provider client and the persistence layer are separate modules
+with a plain dataclass between them, so parsing is tested without a socket.
 
-```bash
-# Get latest rates
-curl http://localhost:8000/rates/latest
+A few decisions worth knowing about:
 
-# Get historical data
-curl "http://localhost:8000/rates/history?base=USD&target=EUR&start=2026-01-01&end=2026-01-14"
+- **SQLite on purpose.** One writer appending about 170 rows an hour, a
+  handful of indexed reads, and data that can be re-fetched. Foreign keys and
+  WAL are switched on per connection, since SQLite leaves both off by default
+  and the schema relies on the first.
+- **Timestamps are aware UTC end to end.** SQLite has no timezone type, so a
+  small type decorator refuses naive input and re-attaches UTC on the way out.
+  Rates carry the provider's own quote time, not the moment we asked.
+- **Constant query counts.** A refresh is four statements however many
+  currencies come back, using `ON CONFLICT DO NOTHING` rather than a check
+  then an insert. The watchlist is two statements however many pairs are on
+  it. Tests assert both numbers.
+- **Cross rates are dated by their staler leg**, and the response says which
+  currency they were crossed through, so a computed number is never mistaken
+  for a quoted one.
+- **A migration drift test.** Autogenerate is run against the models in the
+  suite and must find nothing, so a model change without a matching revision
+  fails CI.
 
-# Fetch new rates
-curl -X POST http://localhost:8000/rates/fetch-now
+**Frontend.** React 19, Redux Toolkit Query for the API layer, Recharts,
+Tailwind with the palette defined once in `src/theme.ts`. Tests use Vitest,
+Testing Library and msw at the network boundary, so the real query layer and
+cache run under test.
 
-# Delete a pair
-curl -X DELETE http://localhost:8000/rates/pairs/USD/EUR
-```
-
-## Usage
-
-### Adding Currency Pairs
-
-1. Click "Add Pair" in the watchlist sidebar
-2. Enter base currency (e.g., `USD`)
-3. Enter target currency (e.g., `EUR`)
-4. Click "Add"
-5. Click "Fetch Rates" to load data
-
-### Viewing Historical Data
-
-1. Click on any currency pair in the watchlist
-2. The chart will display historical rates
-3. Use period buttons (7d, 30d, 90d) to change time range
-
-### Managing Pairs
-
-- **Hide Pair**: Click the eye icon to hide a pair (still tracked)
-- **Delete Pair**: Click the trash icon to permanently remove a pair and its history
-- **Show Hidden**: Click "Show X hidden" to reveal hidden pairs
-
-## Database Schema
-
-### currency_pairs
-- `id` (Primary Key)
-- `base_currency` (String, indexed)
-- `target_currency` (String, indexed)
-- `created_at` (Timestamp)
-- `updated_at` (Timestamp)
-
-### exchange_rates
-- `id` (Primary Key)
-- `currency_pair_id` (Foreign Key → currency_pairs.id)
-- `rate` (Decimal, indexed)
-- `timestamp` (Timestamp, indexed)
-- `created_at` (Timestamp)
-- `updated_at` (Timestamp)
-
-## Troubleshooting
-
-### Database Issues
-
-**Error: `no such table: currency_pairs`**
-
-The schema has not been applied. Run `alembic upgrade head` from `backend/`.
-
-**Starting over**
-
-The data is all re-fetchable, so deleting `backend/currency_tracker.db` and
-running `alembic upgrade head` again is a valid reset.
-
-### Port Already in Use
-
-**Backend (Port 8000):**
-
-On Windows:
-```bash
-netstat -ano | findstr :8000
-taskkill /PID <PID> /F
-```
-
-On macOS/Linux:
-```bash
-lsof -ti:8000 | xargs kill -9
-```
-
-Or just change the port:
-```bash
-uvicorn app.main:app --reload --port 8001
-```
-
-**Frontend (Port 5173):**
-
-```bash
-npm run dev -- --port 3000
-```
-
-### CORS Errors
-
-If you're seeing CORS errors in the browser:
-
-1. Make sure the backend is running
-2. Check that `CORS_ORIGINS` in your backend `.env` includes your frontend URL
-3. Restart the backend server after changing `.env`
-4. Verify the frontend URL matches exactly (including `http://` vs `https://`)
-
-### Missing Dependencies
-
-**Backend:**
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm install
-```
-
-### Chart Not Showing Data
-
-- Make sure you've clicked "Fetch Rates" at least once
-- Check the browser console for any errors
-- Verify the backend API is responding: `curl http://localhost:8000/rates/latest`
-- Check that the selected pair has historical data
+- Rates show at a precision that follows their magnitude, the way a dealing
+  screen does: `156.02`, `0.8600`, `0.00001235`.
+- The chart's visible range has a floor, so a pegged pair's rounding noise
+  reads as flat rather than as a rally.
+- The converter fetches a rate once per pair and multiplies locally; typing an
+  amount never hits the network.
+- A refetch holds the previous render at reduced opacity rather than flashing
+  a spinner.
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Backend tests
 cd backend
+pip install -r requirements-dev.txt
 pytest
-
-# Frontend tests
-cd frontend
-npm test
+ruff check . && ruff format --check .
+alembic revision --autogenerate -m "what changed"    # after a model change
+python scripts/seed_demo.py --days 7                 # synthetic history, for a populated chart
 ```
 
-### Code Quality
+```bash
+cd frontend
+npm test
+npm run lint && npm run typecheck
+```
 
-- **Backend**: Follow PEP 8 style guide
-- **Frontend**: ESLint and Prettier are configured
-- Use meaningful variable and function names
-- Add docstrings to functions and classes
-- Handle errors gracefully with try-catch blocks
-
-### Environment Variables
-
-Never commit `.env` files to version control. Use the `.env.example` file as a template.
-
-## Production Deployment
-
-**Backend:**
-1. Set `LOG_LEVEL=INFO` or `WARNING` in production
-2. Use a production ASGI server like Gunicorn with Uvicorn workers
-3. Configure proper CORS origins for your domain
-4. Use environment variables for all sensitive data
-
-**Frontend:**
-1. Build for production: `npm run build`
-2. Serve static files with a web server (Nginx, Apache)
-3. Configure API endpoint for production backend
-4. Enable HTTPS
-
-**Popular Deployment Options:**
-- **Backend**: Railway, Render, Heroku, DigitalOcean
-- **Frontend**: Vercel, Netlify, GitHub Pages, Cloudflare Pages
-- **Full-Stack**: Docker Compose on VPS
-
-## Screenshots
-
-![Main Interface](screenshots/main-interface.png)
-
-## Author
-
-[teorii](https://github.com/teorii)
-
-## Acknowledgments
-
-- Exchange Rate API provided by [exchangerate.host](https://exchangerate.host)
-- Built with [FastAPI](https://fastapi.tiangolo.com/) and [React](https://react.dev/)
+CI runs all of the above on every push. The backend suite runs against an
+in-memory database and never contacts the network.
