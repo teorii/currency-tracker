@@ -136,3 +136,7 @@ npm run lint && npm run typecheck
 
 CI runs all of the above on every push. The backend suite runs against an
 in-memory database and never contacts the network.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
