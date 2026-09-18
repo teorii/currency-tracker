@@ -3,12 +3,14 @@ import { useState } from 'react';
 import Converter from './components/Converter';
 import HealthBadge from './components/HealthBadge';
 import RateChart from './components/RateChart';
-import Watchlist, { type Pair } from './components/Watchlist';
-import { useGetLatestRatesQuery } from './store/api/ratesApi';
+import Watchlist from './components/Watchlist';
+import { readPair, updateUrl } from './lib/urlState';
+import { useGetLatestRatesQuery, type PairRef } from './store/api/ratesApi';
 
 export default function App() {
   const { data } = useGetLatestRatesQuery();
-  const [chosenPair, setChosenPair] = useState<Pair | null>(null);
+  // Seeded from the query string so a shared link opens on the same pair.
+  const [chosenPair, setChosenPair] = useState<PairRef | null>(readPair);
 
   // Derived rather than stored, so the first pair shows as soon as rates
   // arrive without an effect writing state on the render that receives them.
@@ -16,6 +18,11 @@ export default function App() {
   const selectedPair =
     chosenPair ??
     (firstRate ? { base: firstRate.base_currency, target: firstRate.target_currency } : null);
+
+  const choosePair = (pair: PairRef) => {
+    setChosenPair(pair);
+    updateUrl({ base: pair.base, target: pair.target });
+  };
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -47,7 +54,7 @@ export default function App() {
         </main>
 
         <aside className="w-80 shrink-0 border-l border-line bg-surface-raised">
-          <Watchlist selected={selectedPair} onSelect={setChosenPair} />
+          <Watchlist selected={selectedPair} onSelect={choosePair} />
         </aside>
       </div>
     </div>

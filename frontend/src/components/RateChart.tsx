@@ -5,6 +5,7 @@ import { formatClock, formatDateTime, formatRate } from '../lib/format';
 import { historyCsvUrl, useGetHistoryQuery } from '../store/api/ratesApi';
 import { palette } from '../theme';
 import { paddedDomain, summarise, toPoints, type Point } from '../lib/chart';
+import { readParam, updateUrl } from '../lib/urlState';
 import Delta from './Delta';
 
 interface RateChartProps {
@@ -23,8 +24,19 @@ const PERIODS = [
 
 type PeriodKey = (typeof PERIODS)[number]['key'];
 
+const DEFAULT_PERIOD: PeriodKey = '1W';
+
+const isPeriodKey = (value: string | null): value is PeriodKey =>
+  PERIODS.some((period) => period.key === value);
+
+/** The period named in the URL, or the default when it is absent or not one we offer. */
+function initialPeriod(): PeriodKey {
+  const requested = readParam('period');
+  return isPeriodKey(requested) ? requested : DEFAULT_PERIOD;
+}
+
 export default function RateChart({ base, target }: RateChartProps) {
-  const [periodKey, setPeriodKey] = useState<PeriodKey>('1W');
+  const [periodKey, setPeriodKey] = useState<PeriodKey>(initialPeriod);
   const period = PERIODS.find((candidate) => candidate.key === periodKey) ?? PERIODS[1];
 
   // Fixed when the period changes, not on every render: a fresh end time on
@@ -80,7 +92,10 @@ export default function RateChart({ base, target }: RateChartProps) {
               <button
                 key={key}
                 type="button"
-                onClick={() => setPeriodKey(key)}
+                onClick={() => {
+                setPeriodKey(key);
+                updateUrl({ period: key });
+              }}
                 aria-pressed={key === periodKey}
                 className={`rounded px-2.5 py-1 text-xs ${
                   key === periodKey ? 'bg-surface-overlay text-ink' : 'text-ink-muted hover:text-ink'

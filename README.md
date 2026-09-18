@@ -19,6 +19,8 @@ to run.
   never quotes, and says how the number was arrived at: quoted, inverted, or
   crossed through a third currency.
 - Exports the range on screen as CSV.
+- Keeps the pair and period in the URL, so a view can be bookmarked or
+  shared: `/?base=EUR&target=JPY&period=1M`.
 - Reports its own health, and refreshes on the hour without being asked.
 
 The whole thing is usable from the keyboard: arrows walk the watchlist,

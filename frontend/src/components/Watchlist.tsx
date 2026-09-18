@@ -6,20 +6,16 @@ import {
   useGetLatestRatesQuery,
   useGetPairsQuery,
   useSetPairWatchedMutation,
+  type PairRef,
   type RateSnapshot,
   type TrackedPair,
 } from '../store/api/ratesApi';
 import Delta from './Delta';
 import Sparkline from './Sparkline';
 
-export interface Pair {
-  base: string;
-  target: string;
-}
-
 interface WatchlistProps {
-  selected: Pair | null;
-  onSelect: (pair: Pair) => void;
+  selected: PairRef | null;
+  onSelect: (pair: PairRef) => void;
 }
 
 const pairKey = (base: string, target: string) => `${base}/${target}`;
@@ -103,8 +99,8 @@ function WatchedPairs({
   onSelect,
 }: {
   needle: string;
-  selected: Pair | null;
-  onSelect: (pair: Pair) => void;
+  selected: PairRef | null;
+  onSelect: (pair: PairRef) => void;
 }) {
   const { data, error, isLoading, isFetching, refetch } = useGetLatestRatesQuery();
   const [setWatched] = useSetPairWatchedMutation();

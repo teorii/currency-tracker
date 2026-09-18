@@ -35,4 +35,48 @@ describe('App', () => {
 
     expect(await screen.findByText(/select a pair/i)).toBeInTheDocument();
   });
+
+  describe('deep links', () => {
+    it('opens on the pair named in the url instead of the first one', async () => {
+      window.history.replaceState(null, '', '/?base=USD&target=JPY');
+
+      renderWithStore(<App />);
+
+      expect(await screen.findByRole('button', { name: /^USD\/JPY/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(screen.getByRole('button', { name: /^USD\/EUR/ })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+
+    it('writes the pair to the url when one is chosen', async () => {
+      renderWithStore(<App />);
+
+      await userEvent.click(await screen.findByRole('button', { name: /^USD\/JPY/ }));
+
+      expect(window.location.search).toBe('?base=USD&target=JPY');
+    });
+
+    it('leaves the url alone when only the default pair is showing', async () => {
+      renderWithStore(<App />);
+
+      await screen.findByRole('button', { name: /^USD\/EUR/ });
+
+      expect(window.location.search).toBe('');
+    });
+
+    it('falls back to the first pair when the url names a malformed one', async () => {
+      window.history.replaceState(null, '', '/?base=DOLLAR&target=EUR');
+
+      renderWithStore(<App />);
+
+      expect(await screen.findByRole('button', { name: /^USD\/EUR/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+  });
 });

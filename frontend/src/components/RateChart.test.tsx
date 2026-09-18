@@ -84,6 +84,40 @@ describe('RateChart', () => {
   });
 });
 
+describe('RateChart deep links', () => {
+  it('starts on the period named in the url', async () => {
+    window.history.replaceState(null, '', '/?period=1M');
+
+    renderWithStore(<RateChart base="USD" target="EUR" />);
+
+    expect(await screen.findByRole('button', { name: '1M' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('ignores a period it does not offer', async () => {
+    window.history.replaceState(null, '', '/?period=5Y');
+
+    renderWithStore(<RateChart base="USD" target="EUR" />);
+
+    expect(await screen.findByRole('button', { name: '1W' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('writes the period to the url without dropping the pair', async () => {
+    window.history.replaceState(null, '', '/?base=USD&target=EUR');
+    renderWithStore(<RateChart base="USD" target="EUR" />);
+    await screen.findByText('0.8610');
+
+    await userEvent.click(screen.getByRole('button', { name: '3M' }));
+
+    expect(window.location.search).toBe('?base=USD&target=EUR&period=3M');
+  });
+});
+
 describe('RateChart export', () => {
   it('links to a csv of exactly the range on screen', async () => {
     renderWithStore(<RateChart base="USD" target="EUR" />);
