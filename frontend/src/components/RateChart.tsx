@@ -137,7 +137,7 @@ export default function RateChart({ base, target }: RateChartProps) {
                 tick={{ fill: palette.inkMuted, fontSize: 11 }}
                 axisLine={{ stroke: palette.line }}
                 tickLine={false}
-                minTickGap={48}
+                minTickGap={96}
                 interval="preserveStartEnd"
               />
               <YAxis
